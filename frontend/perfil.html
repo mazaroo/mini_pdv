@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Meu Perfil - Mini PDV</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="style_roxo.css">
+  <script>document.documentElement.setAttribute('data-tema', localStorage.getItem('tema') || 'escuro');</script>
+</head>
+<body>
+  <div class="container pagina-form">
+    <h1>🔑 Meu Perfil</h1>
+    <p class="subtitulo" id="resumo-usuario"></p>
+
+    <form id="form-senha">
+      <label for="senha-atual">Senha atual</label>
+      <input type="password" id="senha-atual" required>
+
+      <label for="senha-nova">Nova senha</label>
+      <input type="password" id="senha-nova" required minlength="4">
+
+      <label for="senha-confirmar">Confirmar nova senha</label>
+      <input type="password" id="senha-confirmar" required minlength="4">
+
+      <button type="submit">Trocar senha</button>
+    </form>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    exigirLogin();
+    renderizarNavbar('perfil');
+
+    const usuario = getUsuarioLogado();
+    document.getElementById('resumo-usuario').textContent =
+      `${usuario.nome}${usuario.cargo ? ' — ' + usuario.cargo : ''}${usuario.is_admin ? ' (Administrador)' : ''}`;
+
+    document.getElementById('form-senha').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const senhaAtual = document.getElementById('senha-atual').value;
+      const novaSenha = document.getElementById('senha-nova').value;
+      const confirmar = document.getElementById('senha-confirmar').value;
+
+      if (novaSenha !== confirmar) {
+        mostrarToast('A confirmação não bate com a nova senha', 'erro');
+        return;
+      }
+
+      const resultado = await apiPut('/api/auth/senha', {
+        funcionario_id: usuario.funcionario_id,
+        senhaAtual,
+        novaSenha,
+      });
+
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+      } else {
+        mostrarToast('✔ Senha alterada com sucesso', 'sucesso');
+        e.target.reset();
+      }
+    });
+  </script>
+</body>
+</html>

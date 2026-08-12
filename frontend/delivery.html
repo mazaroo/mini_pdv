@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Delivery - Mini PDV</title>
+  <link rel="stylesheet" href="style_roxo.css">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <script>document.documentElement.setAttribute('data-tema', localStorage.getItem('tema') || 'escuro');</script>
+</head>
+<body>
+  <div class="container">
+    <h1>🛵 Delivery</h1>
+    <p class="subtitulo">
+      Link público pra clientes fazerem pedido:
+      <code id="link-publico"></code>
+      <button type="button" id="btn-copiar-link" class="secundario" style="margin-left:8px; padding:4px 10px; font-size:12px;">Copiar link</button>
+    </p>
+
+    <section class="stats-grid" id="stats-delivery">
+      <div class="stat-card">
+        <span class="stat-label">Pedidos hoje</span>
+        <span class="stat-valor" id="stat-pedidos-hoje">—</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Em andamento</span>
+        <span class="stat-valor" id="stat-em-andamento">—</span>
+      </div>
+      <div class="stat-card destaque">
+        <span class="stat-label">Faturamento delivery hoje</span>
+        <span class="stat-valor" id="stat-faturamento-hoje">—</span>
+      </div>
+    </section>
+
+    <div class="lista-header">
+      <h2>Pedidos</h2>
+      <select id="filtro-status">
+        <option value="ativos">Em andamento</option>
+        <option value="todos">Todos</option>
+        <option value="novo">Novos</option>
+        <option value="entregue">Entregues</option>
+        <option value="cancelado">Cancelados</option>
+      </select>
+    </div>
+
+    <div id="lista-pedidos"></div>
+    <p class="grafico-vazio" id="pedidos-vazio" style="display:none;">Nenhum pedido por aqui ainda.</p>
+
+    <div id="detalhe-itens-pedido" style="margin-top:20px;"></div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    exigirLogin();
+    exigirPermissao('pode_delivery');
+    renderizarNavbar('delivery');
+
+    document.getElementById('link-publico').textContent = window.location.origin + '/pedido.html';
+    document.getElementById('btn-copiar-link').addEventListener('click', () => {
+      navigator.clipboard.writeText(window.location.origin + '/pedido.html');
+      mostrarToast('✔ Link copiado', 'sucesso');
+    });
+
+    const ROTULOS_STATUS = {
+      novo: 'Novo',
+      preparando: 'Preparando',
+      saiu_entrega: 'Saiu p/ entrega',
+      entregue: 'Entregue',
+      cancelado: 'Cancelado',
+    };
+
+    const PROXIMO_STATUS = {
+      preparando: { status: 'saiu_entrega', label: '🛵 Saiu para entrega' },
+      saiu_entrega: { status: 'entregue', label: '✅ Marcar como entregue' },
+    };
+
+    let pedidos = [];
+
+    async function carregarStats() {
+      const stats = await apiGet('/api/dashboard/delivery');
+      document.getElementById('stat-pedidos-hoje').textContent = stats.pedidos_hoje;
+      document.getElementById('stat-em-andamento').textContent = stats.em_andamento;
+      document.getElementById('stat-faturamento-hoje').textContent = formatarMoeda(stats.faturamento_hoje);
+    }
+
+    async function carregarPedidos() {
+      pedidos = await apiGet('/api/pedidos');
+      renderizarPedidos();
+    }
+
+    function renderizarPedidos() {
+      const filtro = document.getElementById('filtro-status').value;
+
+      let lista = pedidos;
+      if (filtro === 'ativos') {
+        lista = pedidos.filter(p => !['entregue', 'cancelado'].includes(p.status));
+      } else if (filtro !== 'todos') {
+        lista = pedidos.filter(p => p.status === filtro);
+      }
+
+      const container = document.getElementById('lista-pedidos');
+      document.getElementById('pedidos-vazio').style.display = lista.length === 0 ? 'block' : 'none';
+
+      container.innerHTML = lista.map(p => {
+        const proximo = PROXIMO_STATUS[p.status];
+        const podeConfirmar = p.status === 'novo' && !p.venda_id;
+        const podeCancelar = !p.venda_id && p.status !== 'cancelado';
+
+        return `
+          <div class="pedido-card">
+            <div class="pedido-card-topo">
+              <div>
+                <strong>#${p.pedido_id} · ${p.nome_cliente}</strong>
+                <span class="pedido-meta">📞 ${p.telefone_cliente} · ${p.tipo_entrega === 'entrega' ? '🛵 Entrega' : '🏠 Retirada'} · ${formatarData(p.data_pedido)}</span>
+              </div>
+              <span class="badge-status badge-status-${p.status}">${ROTULOS_STATUS[p.status]}</span>
+            </div>
+
+            <div class="pedido-card-corpo">
+              ${p.endereco ? `<div>📍 ${p.endereco}</div>` : ''}
+              <div>💳 ${p.forma_pagamento}</div>
+              ${p.observacoes ? `<div>📝 ${p.observacoes}</div>` : ''}
+              ${p.motoboy ? `<div>🛵 Motoboy: <strong>${p.motoboy}</strong></div>` : ''}
+              <button type="button" class="secundario" onclick="verItensPedido(${p.pedido_id})">Ver itens</button>
+            </div>
+
+            <div class="pedido-card-total">Total: ${formatarMoeda(p.total)}</div>
+
+            <div class="pedido-card-acoes">
+              ${podeConfirmar ? `<button type="button" onclick="confirmarPedido(${p.pedido_id})">✅ Confirmar pedido</button>` : ''}
+              ${p.tipo_entrega === 'entrega' && p.status !== 'cancelado' && p.status !== 'entregue' ? `<button type="button" class="secundario" onclick="definirMotoboy(${p.pedido_id})">🛵 Motoboy</button>` : ''}
+              ${proximo ? `<button type="button" class="secundario" onclick="avancarStatus(${p.pedido_id}, '${proximo.status}')">${proximo.label}</button>` : ''}
+              ${podeCancelar ? `<button type="button" class="icone perigo" onclick="cancelarPedido(${p.pedido_id})" title="Cancelar pedido">✖</button>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    document.getElementById('filtro-status').addEventListener('change', renderizarPedidos);
+
+    async function confirmarPedido(id) {
+      if (!confirm('Confirmar esse pedido? Isso vai descontar o estoque e registrar a venda.')) return;
+
+      const resultado = await apiPut(`/api/pedidos/${id}/confirmar`, {});
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+      } else {
+        mostrarToast(`✔ ${resultado.mensagem}`, 'sucesso');
+        carregarPedidos();
+        carregarStats();
+      }
+    }
+
+    async function avancarStatus(id, novoStatus) {
+      const resultado = await apiPut(`/api/pedidos/${id}/status`, { status: novoStatus });
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+      } else {
+        mostrarToast(`✔ Status: ${ROTULOS_STATUS[novoStatus]}`, 'sucesso');
+        carregarPedidos();
+      }
+    }
+
+    async function definirMotoboy(id) {
+      const pedido = pedidos.find(p => p.pedido_id === id);
+      const nome = prompt('Nome do motoboy:', pedido?.motoboy ?? '');
+      if (nome === null) return;
+
+      const resultado = await apiPut(`/api/pedidos/${id}/status`, { status: pedido.status, motoboy: nome });
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+      } else {
+        mostrarToast('✔ Motoboy definido', 'sucesso');
+        carregarPedidos();
+      }
+    }
+
+    async function cancelarPedido(id) {
+      if (!confirm('Cancelar esse pedido?')) return;
+
+      const resultado = await apiPut(`/api/pedidos/${id}/status`, { status: 'cancelado' });
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+      } else {
+        mostrarToast('✔ Pedido cancelado', 'sucesso');
+        carregarPedidos();
+      }
+    }
+
+    async function verItensPedido(id) {
+      const itens = await apiGet(`/api/pedidos/${id}/itens`);
+      const div = document.getElementById('detalhe-itens-pedido');
+
+      const linhas = itens.map(i => `
+        <tr>
+          <td>${i.produto}</td>
+          <td>${i.quantidade}</td>
+          <td>${formatarMoeda(i.preco_unitario)}</td>
+          <td>${formatarMoeda(i.valor_total)}</td>
+        </tr>
+      `).join('');
+
+      div.innerHTML = `
+        <h2>Itens do pedido #${id}</h2>
+        <table>
+          <thead>
+            <tr><th>Produto</th><th>Qtd</th><th>Preço unit.</th><th>Subtotal</th></tr>
+          </thead>
+          <tbody>${linhas}</tbody>
+        </table>
+      `;
+      div.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    carregarStats();
+    carregarPedidos();
+
+    // Fica de olho em pedidos novos chegando, sem precisar recarregar a página
+    setInterval(() => {
+      carregarPedidos();
+      carregarStats();
+    }, 15000);
+  </script>
+</body>
+</html>

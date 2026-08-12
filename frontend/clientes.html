@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Clientes - Mini PDV</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="style_roxo.css">
+  <script>document.documentElement.setAttribute('data-tema', localStorage.getItem('tema') || 'escuro');</script>
+</head>
+<body>
+  <div class="container">
+    <h1>👤 Clientes</h1>
+
+    <form id="form-cliente">
+      <label for="nome">Nome</label>
+      <input type="text" id="nome" required>
+
+      <label for="cpf">CPF</label>
+      <input type="text" id="cpf" placeholder="000.000.000-00">
+
+      <label for="telefone">Telefone</label>
+      <input type="text" id="telefone" placeholder="(00) 00000-0000">
+
+      <label for="email">Email</label>
+      <input type="email" id="email">
+
+      <button type="submit" id="btn-salvar-cliente">Cadastrar cliente</button>
+      <button type="button" id="btn-cancelar-cliente" class="secundario" style="display:none;">Cancelar edição</button>
+    </form>
+
+    <div class="bloco-lista">
+      <div class="lista-header">
+        <h2>Clientes cadastrados</h2>
+        <input type="text" id="busca-cliente" class="busca" placeholder="🔎 Buscar por nome...">
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Nome</th>
+            <th>CPF</th>
+            <th>Telefone</th>
+            <th>Email</th>
+            <th>Cadastro</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tabela-clientes"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="modal-ficha" class="modal-overlay">
+    <div class="modal-recibo modal-ficha-conteudo">
+      <h2 id="ficha-titulo">Histórico do cliente</h2>
+      <div id="ficha-corpo"></div>
+      <div class="modal-acoes">
+        <button type="button" id="btn-fechar-ficha" class="secundario">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    exigirLogin();
+    exigirPermissao('pode_clientes');
+    renderizarNavbar('clientes');
+
+    const form = document.getElementById('form-cliente');
+    const btnSalvar = document.getElementById('btn-salvar-cliente');
+    const btnCancelar = document.getElementById('btn-cancelar-cliente');
+    const campoCpf = document.getElementById('cpf');
+    const campoTelefone = document.getElementById('telefone');
+    const campoEmail = document.getElementById('email');
+    let clientes = [];
+    let editandoId = null;
+
+    campoCpf.addEventListener('input', (e) => { e.target.value = mascararCPF(e.target.value); });
+    campoTelefone.addEventListener('input', (e) => { e.target.value = mascararTelefone(e.target.value); });
+
+    async function carregarClientes() {
+      clientes = await apiGet('/api/clientes');
+      renderizarClientes(clientes);
+    }
+
+    function renderizarClientes(lista) {
+      const tbody = document.getElementById('tabela-clientes');
+      tbody.innerHTML = '';
+      lista.forEach(c => {
+        tbody.innerHTML += `
+          <tr>
+            <td>${c.cliente_id}</td>
+            <td>${c.nome}</td>
+            <td>${c.cpf ?? ''}</td>
+            <td>${c.telefone ?? ''}</td>
+            <td>${c.email ?? ''}</td>
+            <td>${formatarData(c.data_cadastro)}</td>
+            <td class="acoes">
+              <button type="button" class="icone" onclick="abrirFicha(${c.cliente_id})" title="Ver histórico de compras">👁️</button>
+              <button type="button" class="icone" onclick="editarCliente(${c.cliente_id})" title="Editar">✏️</button>
+              <button type="button" class="icone perigo" onclick="excluirCliente(${c.cliente_id})" title="Excluir">🗑️</button>
+            </td>
+          </tr>
+        `;
+      });
+      animarLinhas(tbody);
+    }
+
+    function editarCliente(id) {
+      const c = clientes.find(x => x.cliente_id === id);
+      if (!c) return;
+
+      editandoId = id;
+      document.getElementById('nome').value = c.nome ?? '';
+      campoCpf.value = mascararCPF(c.cpf ?? '');
+      campoTelefone.value = mascararTelefone(c.telefone ?? '');
+      campoEmail.value = c.email ?? '';
+
+      btnSalvar.textContent = 'Salvar alterações';
+      btnCancelar.style.display = 'inline-block';
+      form.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function sairModoEdicao() {
+      editandoId = null;
+      form.reset();
+      btnSalvar.textContent = 'Cadastrar cliente';
+      btnCancelar.style.display = 'none';
+    }
+
+    async function excluirCliente(id) {
+      if (!confirm('Tem certeza que deseja excluir este cliente?')) return;
+
+      const resultado = await apiDelete(`/api/clientes/${id}`);
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+      } else {
+        mostrarToast(`✔ ${resultado.mensagem}`, 'sucesso');
+        if (editandoId === id) sairModoEdicao();
+        carregarClientes();
+      }
+    }
+
+    async function abrirFicha(id) {
+      const cliente = clientes.find(x => x.cliente_id === id);
+      if (!cliente) return;
+
+      document.getElementById('ficha-titulo').textContent = `👤 ${cliente.nome}`;
+      const corpo = document.getElementById('ficha-corpo');
+      corpo.innerHTML = '<p class="grafico-vazio">Carregando...</p>';
+      document.getElementById('modal-ficha').classList.add('ativo');
+
+      const vendas = await apiGet(`/api/clientes/${id}/vendas`);
+
+      if (vendas.length === 0) {
+        corpo.innerHTML = '<p class="grafico-vazio">Esse cliente ainda não fez nenhuma compra.</p>';
+        return;
+      }
+
+      const totalGasto = vendas
+        .filter(v => !v.cancelada)
+        .reduce((soma, v) => soma + Number(v.total), 0);
+
+      const linhas = vendas.map(v => `
+        <div class="ficha-linha ${v.cancelada ? 'ficha-linha-cancelada' : ''}">
+          <div>
+            <strong>Venda #${v.venda_id}</strong>
+            <span class="ficha-data">${formatarData(v.data_venda)} · ${v.forma_pagamento}</span>
+          </div>
+          <div class="ficha-valor">
+            ${v.cancelada ? '<span class="badge-cancelada">cancelada</span>' : formatarMoeda(v.total)}
+          </div>
+        </div>
+      `).join('');
+
+      corpo.innerHTML = `
+        <div class="ficha-resumo">
+          <span>${vendas.length} compra(s) no total</span>
+          <strong>${formatarMoeda(totalGasto)} gastos</strong>
+        </div>
+        <div class="ficha-lista">${linhas}</div>
+      `;
+    }
+
+    document.getElementById('btn-fechar-ficha').addEventListener('click', () => {
+      document.getElementById('modal-ficha').classList.remove('ativo');
+    });
+
+    btnCancelar.addEventListener('click', sairModoEdicao);
+
+    document.getElementById('busca-cliente').addEventListener('input', (e) => {
+      const termo = e.target.value.trim().toLowerCase();
+      renderizarClientes(clientes.filter(c => c.nome.toLowerCase().includes(termo)));
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const dados = {
+        nome: document.getElementById('nome').value,
+        cpf: campoCpf.value,
+        telefone: campoTelefone.value,
+        email: campoEmail.value,
+      };
+
+      // CPF, telefone e email são opcionais, mas se preenchidos precisam ser válidos
+      if (dados.cpf && !validarCPF(dados.cpf)) {
+        mostrarToast('CPF inválido. Confira os números digitados.', 'erro');
+        campoCpf.focus();
+        return;
+      }
+      if (dados.telefone && !validarTelefone(dados.telefone)) {
+        mostrarToast('Telefone inválido. Use o formato (00) 00000-0000.', 'erro');
+        campoTelefone.focus();
+        return;
+      }
+      if (dados.email && !validarEmail(dados.email)) {
+        mostrarToast('Email inválido.', 'erro');
+        campoEmail.focus();
+        return;
+      }
+
+      const resultado = editandoId
+        ? await apiPut(`/api/clientes/${editandoId}`, dados)
+        : await apiPost('/api/clientes', dados);
+
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+      } else {
+        mostrarToast(`✔ ${resultado.mensagem}`, 'sucesso');
+        sairModoEdicao();
+        carregarClientes();
+      }
+    });
+
+    carregarClientes();
+  </script>
+</body>
+</html>

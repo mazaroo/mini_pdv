@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Histórico - Mini PDV</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="style_roxo.css">
+  <script>document.documentElement.setAttribute('data-tema', localStorage.getItem('tema') || 'escuro');</script>
+</head>
+<body>
+  <div class="container">
+    <div class="lista-header">
+      <h1 style="margin:0;">📋 Histórico de Vendas</h1>
+      <button type="button" id="btn-exportar" class="secundario">⬇️ Exportar CSV</button>
+    </div>
+
+    <div class="filtros-periodo">
+      <div class="filtros-periodo-datas">
+        <label for="filtro-de">De</label>
+        <input type="date" id="filtro-de">
+        <label for="filtro-ate">Até</label>
+        <input type="date" id="filtro-ate">
+      </div>
+      <div class="filtros-periodo-atalhos">
+        <button type="button" class="secundario" onclick="definirPeriodo(0)">Hoje</button>
+        <button type="button" class="secundario" onclick="definirPeriodo(6)">7 dias</button>
+        <button type="button" class="secundario" onclick="definirPeriodo(29)">30 dias</button>
+        <button type="button" class="secundario" onclick="definirPeriodo(null)">Tudo</button>
+      </div>
+      <select id="filtro-origem">
+        <option value="todas">Balcão + Delivery</option>
+        <option value="balcao">🏪 Só balcão</option>
+        <option value="delivery">🛵 Só delivery</option>
+      </select>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Venda</th>
+          <th>Origem</th>
+          <th>Cliente</th>
+          <th>Funcionário</th>
+          <th>Data</th>
+          <th>Pagamento</th>
+          <th>Total</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tabela-vendas"></tbody>
+    </table>
+
+    <div id="detalhe-itens" style="margin-top:20px;"></div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    exigirLogin();
+    exigirPermissao('pode_historico');
+    renderizarNavbar('historico');
+
+    let vendas = [];
+    let vendasFiltradas = [];
+
+    async function carregarVendas() {
+      vendas = await apiGet('/api/vendas');
+      aplicarFiltro();
+    }
+
+    function aplicarFiltro() {
+      const de = document.getElementById('filtro-de').value;
+      const ate = document.getElementById('filtro-ate').value;
+
+      const origem = document.getElementById('filtro-origem').value;
+
+      vendasFiltradas = vendas.filter(v => {
+        const dia = v.data_venda.slice(0, 10);
+        if (de && dia < de) return false;
+        if (ate && dia > ate) return false;
+        if (origem !== 'todas' && v.origem !== origem) return false;
+        return true;
+      });
+
+      renderizarVendas(vendasFiltradas);
+    }
+
+    function definirPeriodo(dias) {
+      if (dias === null) {
+        document.getElementById('filtro-de').value = '';
+        document.getElementById('filtro-ate').value = '';
+      } else {
+        const hoje = new Date();
+        const de = new Date(hoje);
+        de.setDate(de.getDate() - dias);
+        document.getElementById('filtro-de').value = de.toISOString().slice(0, 10);
+        document.getElementById('filtro-ate').value = hoje.toISOString().slice(0, 10);
+      }
+      aplicarFiltro();
+    }
+
+    document.getElementById('filtro-de').addEventListener('change', aplicarFiltro);
+    document.getElementById('filtro-ate').addEventListener('change', aplicarFiltro);
+    document.getElementById('filtro-origem').addEventListener('change', aplicarFiltro);
+
+    function renderizarVendas(lista) {
+      const tbody = document.getElementById('tabela-vendas');
+      tbody.innerHTML = '';
+      lista.forEach(v => {
+        tbody.innerHTML += `
+          <tr class="${v.cancelada ? 'linha-cancelada' : ''}">
+            <td>#${v.venda_id}</td>
+            <td>${v.origem === 'delivery' ? '🛵 Delivery' : '🏪 Balcão'}</td>
+            <td>${v.cliente}</td>
+            <td>${v.funcionario}</td>
+            <td>${formatarData(v.data_venda)}</td>
+            <td>${v.forma_pagamento}</td>
+            <td>${formatarMoeda(v.total)} ${v.cancelada ? '<span class="badge-cancelada">cancelada</span>' : ''}</td>
+            <td class="acoes">
+              <button type="button" class="secundario" onclick="verItens(${v.venda_id})">Ver itens</button>
+              ${!v.cancelada ? `<button type="button" class="icone perigo" onclick="cancelarVenda(${v.venda_id})" title="Cancelar venda">✖</button>` : ''}
+            </td>
+          </tr>
+        `;
+      });
+      animarLinhas(tbody);
+    }
+
+    async function cancelarVenda(vendaId) {
+      if (!confirm(`Cancelar a venda #${vendaId}? O estoque dos itens será devolvido.`)) return;
+
+      const resultado = await apiPut(`/api/vendas/${vendaId}/cancelar`, {});
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+      } else {
+        mostrarToast(`✔ ${resultado.mensagem}`, 'sucesso');
+        carregarVendas();
+      }
+    }
+
+    document.getElementById('btn-exportar').addEventListener('click', () => {
+      if (vendasFiltradas.length === 0) {
+        mostrarToast('Não há vendas para exportar', 'erro');
+        return;
+      }
+
+      const linhas = vendasFiltradas.map(v => [
+        v.venda_id,
+        v.origem === 'delivery' ? 'Delivery' : 'Balcão',
+        v.cliente,
+        v.funcionario,
+        formatarData(v.data_venda),
+        v.forma_pagamento,
+        Number(v.total).toFixed(2).replace('.', ','),
+        v.cancelada ? 'Cancelada' : 'Concluída',
+      ]);
+
+      exportarCSV(
+        `historico-vendas-${new Date().toISOString().slice(0, 10)}.csv`,
+        ['Venda', 'Origem', 'Cliente', 'Funcionário', 'Data', 'Pagamento', 'Total (R$)', 'Status'],
+        linhas
+      );
+      mostrarToast('✔ CSV exportado', 'sucesso');
+    });
+
+    async function verItens(vendaId) {
+      const itens = await apiGet(`/api/vendas/${vendaId}/itens`);
+      const div = document.getElementById('detalhe-itens');
+
+      let total = 0;
+      let linhas = itens.map(i => {
+        total += Number(i.valor_total);
+        return `
+          <tr>
+            <td>${i.produto}</td>
+            <td>${i.quantidade}</td>
+            <td>${formatarMoeda(i.preco_unitario)}</td>
+            <td>${formatarMoeda(i.valor_total)}</td>
+          </tr>
+        `;
+      }).join('');
+
+      const venda = vendas.find(v => v.venda_id === vendaId);
+
+      const desconto = venda ? Number(venda.desconto) : 0;
+      const taxaEntrega = venda ? Number(venda.taxa_entrega) : 0;
+
+      div.innerHTML = `
+        <h2>Itens da venda #${vendaId} ${venda && venda.origem === 'delivery' ? '<span class="badge-status badge-status-saiu_entrega">🛵 Delivery</span>' : ''}</h2>
+        <table>
+          <thead>
+            <tr><th>Produto</th><th>Qtd</th><th>Preço unit.</th><th>Subtotal</th></tr>
+          </thead>
+          <tbody>${linhas}</tbody>
+        </table>
+        <div id="total-venda">
+          <div class="total-linha"><span>Subtotal</span><span>${formatarMoeda(total)}</span></div>
+          ${desconto > 0 ? `<div class="total-linha total-desconto"><span>Desconto</span><span>− ${formatarMoeda(desconto)}</span></div>` : ''}
+          ${taxaEntrega > 0 ? `<div class="total-linha"><span>Taxa de entrega</span><span>${formatarMoeda(taxaEntrega)}</span></div>` : ''}
+          <div class="total-linha total-final"><span>Total</span><span>${formatarMoeda(total - desconto + taxaEntrega)}</span></div>
+        </div>
+      `;
+    }
+
+    carregarVendas();
+  </script>
+</body>
+</html>

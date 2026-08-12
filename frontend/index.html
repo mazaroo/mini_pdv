@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Mini PDV</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="style_roxo.css">
+  <script>document.documentElement.setAttribute('data-tema', localStorage.getItem('tema') || 'escuro');</script>
+</head>
+<body>
+  <div class="container container-home">
+    <header class="topo">
+      <div>
+        <h1 id="logo-slot"></h1>
+        <p class="subtitulo">Projeto de estudo — conectado ao banco <code>pdv</code></p>
+      </div>
+    </header>
+
+    <section class="stats-grid" id="stats-grid">
+      <div class="stat-card">
+        <span class="stat-label">Clientes</span>
+        <span class="stat-valor" id="stat-clientes">—</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Produtos</span>
+        <span class="stat-valor" id="stat-produtos">—</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Vendas registradas</span>
+        <span class="stat-valor" id="stat-vendas">—</span>
+      </div>
+      <div class="stat-card destaque">
+        <span class="stat-label">Faturamento total</span>
+        <span class="stat-valor" id="stat-faturamento">—</span>
+      </div>
+    </section>
+
+    <div class="dashboard-grid">
+      <section class="card-grafico">
+        <h2>Faturamento nos últimos 14 dias</h2>
+        <canvas id="grafico-vendas" width="900" height="220"></canvas>
+        <p class="grafico-vazio" id="grafico-vazio" style="display:none;">Ainda não há vendas suficientes pra mostrar o gráfico.</p>
+      </section>
+
+      <section class="card-ranking">
+        <h2>🏆 Mais vendidos</h2>
+        <div id="lista-ranking"></div>
+        <p class="grafico-vazio" id="ranking-vazio" style="display:none;">Ainda não há vendas suficientes.</p>
+      </section>
+    </div>
+
+    <div class="menu-cards">
+      <a href="clientes.html" class="card">
+        <h2>👤 Clientes</h2>
+        <p>Cadastrar e listar clientes</p>
+      </a>
+      <a href="produtos.html" class="card">
+        <h2>📦 Produtos</h2>
+        <p>Cadastrar e listar produtos</p>
+      </a>
+      <a href="vendas.html" class="card">
+        <h2>💰 Nova Venda</h2>
+        <p>Registrar uma venda completa</p>
+      </a>
+      <a href="historico.html" class="card">
+        <h2>📋 Histórico</h2>
+        <p>Ver vendas já realizadas</p>
+      </a>
+    </div>
+
+    <p class="alerta-estoque" id="alerta-estoque"></p>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    exigirLogin();
+    renderizarNavbar('inicio');
+    document.getElementById('logo-slot').innerHTML = logoHTML('grande');
+
+    async function carregarDashboard() {
+      const dados = await apiGet('/api/dashboard');
+
+      document.getElementById('stat-clientes').textContent = dados.total_clientes;
+      document.getElementById('stat-produtos').textContent = dados.total_produtos;
+      document.getElementById('stat-vendas').textContent = dados.total_vendas;
+      document.getElementById('stat-faturamento').textContent = formatarMoeda(dados.faturamento);
+
+      const alerta = document.getElementById('alerta-estoque');
+      if (dados.produtos_baixo_estoque > 0) {
+        alerta.textContent = `⚠ ${dados.produtos_baixo_estoque} produto(s) com estoque abaixo de 10 unidades`;
+      }
+    }
+
+    let diasGraficoCache = null;
+
+    // Monta os últimos 14 dias (incluindo os sem venda, com total 0) e desenha o gráfico
+    async function carregarGrafico() {
+      const dados = await apiGet('/api/dashboard/vendas-por-dia');
+      const porDia = {};
+      dados.forEach(d => { porDia[d.dia.slice(0, 10)] = Number(d.total); });
+
+      const dias = [];
+      const hoje = new Date();
+      for (let i = 13; i >= 0; i--) {
+        const data = new Date(hoje);
+        data.setDate(data.getDate() - i);
+        const chave = data.toISOString().slice(0, 10);
+        dias.push({
+          rotulo: data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+          total: porDia[chave] || 0,
+        });
+      }
+
+      const totalPeriodo = dias.reduce((soma, d) => soma + d.total, 0);
+      if (totalPeriodo === 0) {
+        document.getElementById('grafico-vazio').style.display = 'block';
+        return;
+      }
+
+      diasGraficoCache = dias;
+      desenharGrafico(dias);
+    }
+
+    function desenharGrafico(dias) {
+      const canvas = document.getElementById('grafico-vendas');
+      const ctx = canvas.getContext('2d');
+      const { width, height } = canvas;
+      const margemBaixo = 34;
+      const margemTopo = 16;
+      const alturaUtil = height - margemBaixo - margemTopo;
+      const maxValor = Math.max(...dias.map(d => d.total), 1);
+      const larguraBarra = width / dias.length;
+
+      // lê as cores do tema atual (claro ou escuro) direto das variáveis CSS
+      const estilos = getComputedStyle(document.documentElement);
+      const corRoxoMedio = estilos.getPropertyValue('--roxo-medio').trim();
+      const corRoxoForte = estilos.getPropertyValue('--roxo-forte').trim();
+      const corTextoFraco = estilos.getPropertyValue('--texto-fraco').trim();
+      const corTexto = estilos.getPropertyValue('--texto').trim();
+      const corVazio = estilos.getPropertyValue('--grafico-vazio').trim();
+
+      ctx.clearRect(0, 0, width, height);
+
+      const gradiente = ctx.createLinearGradient(0, margemTopo, 0, height - margemBaixo);
+      gradiente.addColorStop(0, corRoxoMedio);
+      gradiente.addColorStop(1, corRoxoForte);
+
+      dias.forEach((d, i) => {
+        const alturaBarra = (d.total / maxValor) * alturaUtil;
+        const x = i * larguraBarra + larguraBarra * 0.18;
+        const larguraReal = larguraBarra * 0.64;
+        const y = height - margemBaixo - alturaBarra;
+
+        ctx.fillStyle = d.total > 0 ? gradiente : corVazio;
+        ctx.beginPath();
+        ctx.roundRect(x, y, larguraReal, Math.max(alturaBarra, 2), 4);
+        ctx.fill();
+
+        // rótulo do dia (mostra só a cada 2 pra não poluir)
+        if (i % 2 === 0) {
+          ctx.fillStyle = corTextoFraco;
+          ctx.font = '11px Segoe UI, Arial, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(d.rotulo, x + larguraReal / 2, height - 12);
+        }
+
+        // valor em cima da barra, só se houver venda
+        if (d.total > 0) {
+          ctx.fillStyle = corTexto;
+          ctx.font = '10px Segoe UI, Arial, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(formatarMoeda(d.total).replace('R$', '').trim(), x + larguraReal / 2, y - 6);
+        }
+      });
+    }
+
+    // Redesenha o gráfico com as cores certas quando o tema muda
+    document.addEventListener('temaAlterado', () => {
+      if (diasGraficoCache) desenharGrafico(diasGraficoCache);
+    });
+
+    async function carregarRanking() {
+      const lista = await apiGet('/api/dashboard/mais-vendidos');
+
+      if (lista.length === 0) {
+        document.getElementById('ranking-vazio').style.display = 'block';
+        return;
+      }
+
+      const medalhas = ['🥇', '🥈', '🥉'];
+      const maxQuantidade = Math.max(...lista.map(p => Number(p.quantidade_vendida)));
+
+      document.getElementById('lista-ranking').innerHTML = lista.map((p, i) => `
+        <div class="ranking-item">
+          <div class="ranking-cabecalho">
+            <span>${medalhas[i] ?? `${i + 1}.`} ${p.nome}</span>
+            <span class="ranking-qtd">${p.quantidade_vendida}x</span>
+          </div>
+          <div class="ranking-barra-fundo">
+            <div class="ranking-barra" style="width:${(Number(p.quantidade_vendida) / maxQuantidade) * 100}%"></div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    carregarDashboard();
+    carregarGrafico();
+    carregarRanking();
+  </script>
+</body>
+</html>

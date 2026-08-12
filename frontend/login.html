@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Entrar - Mini PDV</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="style_roxo.css">
+  <script>document.documentElement.setAttribute('data-tema', localStorage.getItem('tema') || 'escuro');</script>
+</head>
+<body>
+  <button type="button" id="btn-tema" class="btn-tema-flutuante" title="Alternar tema claro/escuro">
+    <span class="icone-tema">☀️</span>
+  </button>
+
+  <div class="tela-login">
+    <div class="login-card">
+      <h1 id="logo-slot"></h1>
+      <p class="subtitulo">Entre com seu usuário para começar</p>
+
+      <form id="form-login">
+        <label for="funcionario">Funcionário</label>
+        <select id="funcionario" required></select>
+
+        <label for="senha">Senha</label>
+        <input type="password" id="senha" required>
+
+        <button type="submit">Entrar</button>
+      </form>
+
+      <p class="login-dica">Senha padrão para contas novas: <code>1234</code></p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    // Se já tem alguém logado, não faz sentido ficar na tela de login
+    if (getUsuarioLogado()) {
+      window.location.href = 'index.html';
+    }
+
+    document.getElementById('logo-slot').innerHTML = logoHTML('grande');
+
+    document.querySelector('#btn-tema .icone-tema').textContent =
+      document.documentElement.getAttribute('data-tema') === 'claro' ? '🌙' : '☀️';
+    document.getElementById('btn-tema').addEventListener('click', alternarTema);
+
+    async function carregarFuncionarios() {
+      const funcionarios = await apiGet('/api/funcionarios');
+      const select = document.getElementById('funcionario');
+      select.innerHTML = funcionarios
+        .map(f => `<option value="${f.funcionario_id}">${f.nome} — ${f.cargo ?? ''}</option>`)
+        .join('');
+    }
+
+    document.getElementById('form-login').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const dados = {
+        funcionario_id: document.getElementById('funcionario').value,
+        senha: document.getElementById('senha').value,
+      };
+
+      const resultado = await apiPost('/api/auth/login', dados);
+
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+      } else {
+        localStorage.setItem('usuarioLogado', JSON.stringify(resultado));
+        window.location.href = 'index.html';
+      }
+    });
+
+    carregarFuncionarios();
+  </script>
+</body>
+</html>

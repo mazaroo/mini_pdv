@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Administração - Mini PDV</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="style_roxo.css">
+  <script>document.documentElement.setAttribute('data-tema', localStorage.getItem('tema') || 'escuro');</script>
+</head>
+<body>
+  <div class="container">
+    <h1>⚙️ Administração</h1>
+    <p class="subtitulo">Cadastre funcionários e defina o que cada um pode fazer no sistema.</p>
+
+    <form id="form-funcionario">
+      <label for="nome">Nome</label>
+      <input type="text" id="nome" required>
+
+      <label for="cargo">Cargo</label>
+      <input type="text" id="cargo" placeholder="Ex: Vendedor, Gerente...">
+
+      <label for="salario">Salário</label>
+      <input type="number" step="0.01" id="salario">
+
+      <label for="senha" id="label-senha">Senha inicial</label>
+      <input type="password" id="senha" placeholder="mínimo 4 caracteres">
+
+      <label>Permissões</label>
+      <div class="permissoes-grid">
+        <label class="check"><input type="checkbox" id="perm-produtos"> 📦 Produtos (cadastrar/editar/excluir)</label>
+        <label class="check"><input type="checkbox" id="perm-clientes"> 👤 Clientes (cadastrar/editar/excluir)</label>
+        <label class="check"><input type="checkbox" id="perm-vendas"> 💰 Registrar vendas</label>
+        <label class="check"><input type="checkbox" id="perm-historico"> 📋 Ver histórico de vendas</label>
+        <label class="check"><input type="checkbox" id="perm-delivery"> 🛵 Gerenciar delivery</label>
+      </div>
+
+      <button type="submit" id="btn-salvar">Cadastrar funcionário</button>
+      <button type="button" id="btn-cancelar" class="secundario" style="display:none;">Cancelar edição</button>
+    </form>
+
+    <h2>Funcionários cadastrados</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th>Cargo</th>
+          <th>Produtos</th>
+          <th>Clientes</th>
+          <th>Vendas</th>
+          <th>Histórico</th>
+          <th>Delivery</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tabela-funcionarios"></tbody>
+    </table>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    exigirLogin();
+    exigirAdmin();
+    renderizarNavbar('admin');
+
+    const usuarioAtual = getUsuarioLogado();
+    const form = document.getElementById('form-funcionario');
+    const btnSalvar = document.getElementById('btn-salvar');
+    const btnCancelar = document.getElementById('btn-cancelar');
+    const campoSenha = document.getElementById('senha');
+    const labelSenha = document.getElementById('label-senha');
+    let funcionarios = [];
+    let editandoId = null;
+
+    async function carregarFuncionarios() {
+      funcionarios = await apiGet('/api/funcionarios');
+      renderizarFuncionarios();
+    }
+
+    function marcador(valor) {
+      return valor ? '<span class="badge-ok">✔</span>' : '<span class="badge-nao">—</span>';
+    }
+
+    function renderizarFuncionarios() {
+      const tbody = document.getElementById('tabela-funcionarios');
+      tbody.innerHTML = '';
+
+      funcionarios.forEach(f => {
+        if (f.is_admin) {
+          tbody.innerHTML += `
+            <tr>
+              <td>${f.nome}</td>
+              <td>${f.cargo ?? ''}</td>
+              <td colspan="5"><span class="badge-admin">👑 Administrador — acesso total</span></td>
+              <td class="acoes">${f.funcionario_id === usuarioAtual.funcionario_id ? '' : ''}</td>
+            </tr>
+          `;
+          return;
+        }
+
+        tbody.innerHTML += `
+          <tr>
+            <td>${f.nome}</td>
+            <td>${f.cargo ?? ''}</td>
+            <td>${marcador(f.pode_produtos)}</td>
+            <td>${marcador(f.pode_clientes)}</td>
+            <td>${marcador(f.pode_vendas)}</td>
+            <td>${marcador(f.pode_historico)}</td>
+            <td>${marcador(f.pode_delivery)}</td>
+            <td class="acoes">
+              <button type="button" class="icone" onclick="editarFuncionario(${f.funcionario_id})" title="Editar">✏️</button>
+              <button type="button" class="icone" onclick="redefinirSenha(${f.funcionario_id})" title="Redefinir senha">🔑</button>
+              <button type="button" class="icone perigo" onclick="excluirFuncionario(${f.funcionario_id})" title="Excluir">🗑️</button>
+            </td>
+          </tr>
+        `;
+      });
+      animarLinhas(tbody);
+    }
+
+    function editarFuncionario(id) {
+      const f = funcionarios.find(x => x.funcionario_id === id);
+      if (!f) return;
+
+      editandoId = id;
+      document.getElementById('nome').value = f.nome ?? '';
+      document.getElementById('cargo').value = f.cargo ?? '';
+      document.getElementById('salario').value = f.salario ?? '';
+      document.getElementById('perm-produtos').checked = !!f.pode_produtos;
+      document.getElementById('perm-clientes').checked = !!f.pode_clientes;
+      document.getElementById('perm-vendas').checked = !!f.pode_vendas;
+      document.getElementById('perm-historico').checked = !!f.pode_historico;
+      document.getElementById('perm-delivery').checked = !!f.pode_delivery;
+
+      campoSenha.style.display = 'none';
+      labelSenha.style.display = 'none';
+      campoSenha.required = false;
+
+      btnSalvar.textContent = 'Salvar alterações';
+      btnCancelar.style.display = 'inline-block';
+      form.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function sairModoEdicao() {
+      editandoId = null;
+      form.reset();
+      campoSenha.style.display = '';
+      labelSenha.style.display = '';
+      btnSalvar.textContent = 'Cadastrar funcionário';
+      btnCancelar.style.display = 'none';
+    }
+
+    async function redefinirSenha(id) {
+      const novaSenha = prompt('Digite a nova senha para esse funcionário (mínimo 4 caracteres):');
+      if (novaSenha === null) return;
+      if (novaSenha.length < 4) {
+        mostrarToast('A senha precisa ter pelo menos 4 caracteres', 'erro');
+        return;
+      }
+
+      const resultado = await apiPut(`/api/funcionarios/${id}/senha`, { novaSenha });
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+      } else {
+        mostrarToast('✔ Senha redefinida', 'sucesso');
+      }
+    }
+
+    async function excluirFuncionario(id) {
+      if (!confirm('Tem certeza que deseja excluir este funcionário?')) return;
+
+      const resultado = await apiDelete(`/api/funcionarios/${id}`);
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+      } else {
+        mostrarToast(`✔ ${resultado.mensagem}`, 'sucesso');
+        if (editandoId === id) sairModoEdicao();
+        carregarFuncionarios();
+      }
+    }
+
+    btnCancelar.addEventListener('click', sairModoEdicao);
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const dados = {
+        nome: document.getElementById('nome').value,
+        cargo: document.getElementById('cargo').value,
+        salario: document.getElementById('salario').value || null,
+        pode_produtos: document.getElementById('perm-produtos').checked,
+        pode_clientes: document.getElementById('perm-clientes').checked,
+        pode_vendas: document.getElementById('perm-vendas').checked,
+        pode_historico: document.getElementById('perm-historico').checked,
+        pode_delivery: document.getElementById('perm-delivery').checked,
+      };
+
+      if (!editandoId) {
+        dados.senha = campoSenha.value;
+        if (!dados.senha || dados.senha.length < 4) {
+          mostrarToast('A senha inicial precisa ter pelo menos 4 caracteres', 'erro');
+          return;
+        }
+      }
+
+      const resultado = editandoId
+        ? await apiPut(`/api/funcionarios/${editandoId}`, dados)
+        : await apiPost('/api/funcionarios', dados);
+
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+      } else {
+        mostrarToast(`✔ ${resultado.mensagem}`, 'sucesso');
+        sairModoEdicao();
+        carregarFuncionarios();
+      }
+    });
+
+    carregarFuncionarios();
+  </script>
+</body>
+</html>

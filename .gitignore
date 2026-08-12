@@ -1,0 +1,13 @@
+# dependências (cada um roda "npm install" depois de clonar)
+node_modules/
+
+# credenciais locais (nunca commitar isso)
+.env
+.env.local
+
+# arquivos de sistema
+.DS_Store
+Thumbs.db
+
+# configuração local do Claude Code (específica de cada máquina)
+.claude/settings.local.json

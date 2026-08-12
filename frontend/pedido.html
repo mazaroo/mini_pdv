@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Fazer Pedido - Mini PDV</title>
+  <link rel="stylesheet" href="style_roxo.css">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <script>document.documentElement.setAttribute('data-tema', localStorage.getItem('tema') || 'escuro');</script>
+</head>
+<body>
+  <button type="button" id="btn-tema" class="btn-tema-flutuante" title="Alternar tema claro/escuro">
+    <span class="icone-tema">☀️</span>
+  </button>
+
+  <div class="container container-pedido">
+    <header class="topo-pedido">
+      <h1 id="logo-slot"></h1>
+      <p class="subtitulo">Monte seu pedido e envie — é rapidinho!</p>
+    </header>
+
+    <section>
+      <h2>🛍️ Catálogo</h2>
+      <input type="text" id="busca-catalogo" class="busca" placeholder="🔎 Buscar produto..." style="width:100%; margin-bottom:14px;">
+      <div id="catalogo-grid" class="catalogo-grid"></div>
+    </section>
+
+    <section class="secao-pedido">
+      <h2>🛒 Seu pedido</h2>
+      <div id="carrinho-vazio" class="grafico-vazio">Seu carrinho está vazio. Adicione produtos no catálogo acima.</div>
+      <div id="carrinho-itens"></div>
+      <div id="carrinho-total"></div>
+    </section>
+
+    <section class="secao-pedido">
+      <h2>📋 Seus dados</h2>
+      <form id="form-pedido">
+        <label for="nome-cliente">Nome</label>
+        <input type="text" id="nome-cliente" required>
+
+        <label for="telefone-cliente">Telefone (WhatsApp)</label>
+        <input type="text" id="telefone-cliente" placeholder="(00) 00000-0000" required>
+
+        <label>Como você quer receber?</label>
+        <div class="opcoes-entrega">
+          <label class="check"><input type="radio" name="tipo-entrega" value="retirada" checked> 🏠 Retirar no local</label>
+          <label class="check"><input type="radio" name="tipo-entrega" value="entrega"> 🛵 Entrega (+ R$ 5,00)</label>
+        </div>
+
+        <div id="bloco-endereco" style="display:none;">
+          <label for="endereco">Endereço de entrega</label>
+          <input type="text" id="endereco" placeholder="Rua, número, bairro...">
+        </div>
+
+        <label for="pagamento-pedido">Forma de pagamento</label>
+        <select id="pagamento-pedido" required>
+          <option value="Pix">Pix</option>
+          <option value="Cartão">Cartão (na entrega/retirada)</option>
+          <option value="Dinheiro">Dinheiro</option>
+        </select>
+
+        <label for="observacoes">Observações (opcional)</label>
+        <input type="text" id="observacoes" placeholder="Ex: sem cebola, troco para R$ 50...">
+
+        <button type="submit">Enviar pedido</button>
+      </form>
+    </section>
+  </div>
+
+  <div id="modal-confirmacao" class="modal-overlay">
+    <div class="modal-recibo">
+      <div id="confirmacao-conteudo" class="recibo"></div>
+      <div class="modal-acoes">
+        <button type="button" id="btn-novo-pedido">Fazer outro pedido</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    document.getElementById('logo-slot').innerHTML = logoHTML('grande');
+    document.querySelector('#btn-tema .icone-tema').textContent =
+      document.documentElement.getAttribute('data-tema') === 'claro' ? '🌙' : '☀️';
+    document.getElementById('btn-tema').addEventListener('click', alternarTema);
+
+    const TAXA_ENTREGA = 5.0;
+
+    let produtos = [];
+    let carrinho = []; // { produto_id, nome, imagem, quantidade, preco_unitario }
+
+    async function carregarCatalogo() {
+      produtos = await apiGet('/api/produtos');
+      renderizarCatalogo(produtos);
+    }
+
+    function renderizarCatalogo(lista) {
+      const grid = document.getElementById('catalogo-grid');
+      grid.innerHTML = lista.map(p => `
+        <div class="produto-card">
+          ${p.imagem ? `<img src="/${p.imagem}" class="produto-card-imagem">` : '<div class="produto-card-imagem produto-card-sem-foto">📦</div>'}
+          <div class="produto-card-corpo">
+            <strong>${p.nome}</strong>
+            <span class="produto-card-preco">${formatarMoeda(p.preco)}</span>
+            <button type="button" class="secundario" ${p.estoque < 1 ? 'disabled' : ''} onclick="adicionarAoCarrinho(${p.produto_id})">
+              ${p.estoque < 1 ? 'Sem estoque' : '+ Adicionar'}
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    document.getElementById('busca-catalogo').addEventListener('input', (e) => {
+      const termo = e.target.value.trim().toLowerCase();
+      renderizarCatalogo(produtos.filter(p => p.nome.toLowerCase().includes(termo)));
+    });
+
+    function adicionarAoCarrinho(id) {
+      const produto = produtos.find(p => p.produto_id === id);
+      if (!produto) return;
+
+      const itemExistente = carrinho.find(i => i.produto_id === id);
+      if (itemExistente) {
+        itemExistente.quantidade++;
+      } else {
+        carrinho.push({ produto_id: produto.produto_id, nome: produto.nome, quantidade: 1, preco_unitario: produto.preco });
+      }
+      renderizarCarrinho();
+      mostrarToast(`✔ ${produto.nome} adicionado`, 'sucesso');
+    }
+
+    function alterarQuantidade(id, delta) {
+      const item = carrinho.find(i => i.produto_id === id);
+      if (!item) return;
+      item.quantidade += delta;
+      if (item.quantidade <= 0) {
+        carrinho = carrinho.filter(i => i.produto_id !== id);
+      }
+      renderizarCarrinho();
+    }
+
+    function calcularSubtotal() {
+      return carrinho.reduce((soma, i) => soma + i.quantidade * i.preco_unitario, 0);
+    }
+
+    function entregaSelecionada() {
+      return document.querySelector('input[name="tipo-entrega"]:checked').value === 'entrega';
+    }
+
+    function renderizarCarrinho() {
+      const vazio = document.getElementById('carrinho-vazio');
+      const container = document.getElementById('carrinho-itens');
+      const totalDiv = document.getElementById('carrinho-total');
+
+      if (carrinho.length === 0) {
+        vazio.style.display = 'block';
+        container.innerHTML = '';
+        totalDiv.innerHTML = '';
+        return;
+      }
+
+      vazio.style.display = 'none';
+      container.innerHTML = carrinho.map(i => `
+        <div class="item-venda">
+          <span>${i.nome} — ${formatarMoeda(i.quantidade * i.preco_unitario)}</span>
+          <span class="carrinho-stepper">
+            <button type="button" onclick="alterarQuantidade(${i.produto_id}, -1)">−</button>
+            <strong>${i.quantidade}</strong>
+            <button type="button" onclick="alterarQuantidade(${i.produto_id}, 1)">+</button>
+          </span>
+        </div>
+      `).join('');
+
+      const subtotal = calcularSubtotal();
+      const taxa = entregaSelecionada() ? TAXA_ENTREGA : 0;
+      const total = subtotal + taxa;
+
+      totalDiv.innerHTML = `
+        <div class="total-linha"><span>Subtotal</span><span>${formatarMoeda(subtotal)}</span></div>
+        ${taxa > 0 ? `<div class="total-linha"><span>Taxa de entrega</span><span>${formatarMoeda(taxa)}</span></div>` : ''}
+        <div class="total-linha total-final"><span>Total</span><span>${formatarMoeda(total)}</span></div>
+      `;
+    }
+
+    document.querySelectorAll('input[name="tipo-entrega"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById('bloco-endereco').style.display = entregaSelecionada() ? 'block' : 'none';
+        document.getElementById('endereco').required = entregaSelecionada();
+        renderizarCarrinho();
+      });
+    });
+
+    document.getElementById('telefone-cliente').addEventListener('input', (e) => {
+      e.target.value = mascararTelefone(e.target.value);
+    });
+
+    document.getElementById('form-pedido').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      if (carrinho.length === 0) {
+        mostrarToast('Adicione ao menos um produto ao pedido', 'erro');
+        return;
+      }
+
+      const dados = {
+        nome_cliente: document.getElementById('nome-cliente').value,
+        telefone_cliente: document.getElementById('telefone-cliente').value,
+        tipo_entrega: document.querySelector('input[name="tipo-entrega"]:checked').value,
+        endereco: document.getElementById('endereco').value,
+        forma_pagamento: document.getElementById('pagamento-pedido').value,
+        observacoes: document.getElementById('observacoes').value,
+        itens: carrinho.map(i => ({ produto_id: i.produto_id, quantidade: i.quantidade })),
+      };
+
+      const resultado = await apiPost('/api/pedidos', dados);
+
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+        return;
+      }
+
+      document.getElementById('confirmacao-conteudo').innerHTML = `
+        <h2>✅ Pedido recebido!</h2>
+        <p class="recibo-sub">Pedido #${resultado.pedido_id}</p>
+        <div class="recibo-linha"><span>Total</span><span>${formatarMoeda(resultado.total)}</span></div>
+        <p class="recibo-rodape">Obrigado, ${dados.nome_cliente}! Em breve vamos preparar seu pedido. 💜</p>
+      `;
+      document.getElementById('modal-confirmacao').classList.add('ativo');
+    });
+
+    document.getElementById('btn-novo-pedido').addEventListener('click', () => {
+      carrinho = [];
+      document.getElementById('form-pedido').reset();
+      document.getElementById('bloco-endereco').style.display = 'none';
+      renderizarCarrinho();
+      document.getElementById('modal-confirmacao').classList.remove('ativo');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    carregarCatalogo();
+    renderizarCarrinho();
+  </script>
+</body>
+</html>

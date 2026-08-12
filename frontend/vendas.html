@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Nova Venda - Mini PDV</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="style_roxo.css">
+  <script>document.documentElement.setAttribute('data-tema', localStorage.getItem('tema') || 'escuro');</script>
+</head>
+<body>
+  <div class="container">
+    <h1>💰 Nova Venda</h1>
+
+    <form id="form-venda">
+      <label for="cliente">Cliente</label>
+      <select id="cliente" required></select>
+
+      <label>Vendedor</label>
+      <p id="vendedor-logado" class="campo-fixo"></p>
+
+      <label for="pagamento">Forma de pagamento</label>
+      <select id="pagamento" required>
+        <option value="Pix">Pix</option>
+        <option value="Cartão">Cartão</option>
+        <option value="Dinheiro">Dinheiro</option>
+      </select>
+
+      <hr style="margin-top:20px;">
+      <h3>Adicionar item</h3>
+
+      <label for="busca-produto">Produto</label>
+      <div class="busca-produto-wrap">
+        <input type="text" id="busca-produto" placeholder="🔎 Digite o nome do produto..." autocomplete="off">
+        <div id="resultados-produto" class="resultados-busca"></div>
+      </div>
+
+      <label for="quantidade">Quantidade</label>
+      <input type="number" id="quantidade" min="1" value="1">
+
+      <button type="button" id="btn-add-item" class="secundario">+ Adicionar item à venda</button>
+
+      <div id="lista-itens" style="margin-top:16px;"></div>
+
+      <hr style="margin-top:20px;">
+      <label for="desconto-valor">Desconto (opcional)</label>
+      <div class="campo-desconto">
+        <select id="desconto-tipo">
+          <option value="percentual">%</option>
+          <option value="valor">R$</option>
+        </select>
+        <input type="number" id="desconto-valor" min="0" step="0.01" value="0">
+      </div>
+
+      <div id="total-venda"></div>
+
+      <button type="submit">Finalizar venda</button>
+    </form>
+  </div>
+
+  <div id="modal-recibo" class="modal-overlay">
+    <div class="modal-recibo">
+      <div id="recibo-conteudo" class="recibo"></div>
+      <div class="modal-acoes">
+        <button type="button" id="btn-imprimir-recibo">🖨️ Imprimir</button>
+        <button type="button" id="btn-fechar-recibo" class="secundario">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    exigirLogin();
+    exigirPermissao('pode_vendas');
+    renderizarNavbar('vendas');
+
+    const usuarioLogado = getUsuarioLogado();
+    document.getElementById('vendedor-logado').textContent = `👋 ${usuarioLogado.nome}`;
+
+    let produtosDisponiveis = [];
+    let produtoSelecionado = null;
+    let itensVenda = []; // { produto_id, nome, quantidade, preco_unitario }
+
+    async function carregarClientes() {
+      const clientes = await apiGet('/api/clientes');
+      const select = document.getElementById('cliente');
+      select.innerHTML = clientes.map(c => `<option value="${c.cliente_id}">${c.nome}</option>`).join('');
+    }
+
+    async function carregarProdutos() {
+      produtosDisponiveis = await apiGet('/api/produtos');
+    }
+
+    // ---------- busca rápida de produto ----------
+
+    function renderizarResultadosProduto(lista) {
+      const container = document.getElementById('resultados-produto');
+      if (lista.length === 0) {
+        container.innerHTML = '';
+        container.style.display = 'none';
+        return;
+      }
+      container.innerHTML = lista.slice(0, 8).map(p => `
+        <div class="resultado-item" onclick="selecionarProduto(${p.produto_id})">
+          <span>${p.nome}</span>
+          <span class="resultado-detalhe">${formatarMoeda(p.preco)} · estoque: ${p.estoque}</span>
+        </div>
+      `).join('');
+      container.style.display = 'block';
+    }
+
+    function selecionarProduto(id) {
+      produtoSelecionado = produtosDisponiveis.find(p => p.produto_id === id);
+      document.getElementById('busca-produto').value = produtoSelecionado.nome;
+      document.getElementById('resultados-produto').style.display = 'none';
+    }
+
+    document.getElementById('busca-produto').addEventListener('input', (e) => {
+      produtoSelecionado = null;
+      const termo = e.target.value.trim().toLowerCase();
+      if (!termo) {
+        renderizarResultadosProduto([]);
+        return;
+      }
+      renderizarResultadosProduto(produtosDisponiveis.filter(p => p.nome.toLowerCase().includes(termo)));
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.busca-produto-wrap')) {
+        document.getElementById('resultados-produto').style.display = 'none';
+      }
+    });
+
+    // ---------- carrinho e desconto ----------
+
+    function calcularDescontoReais(subtotal) {
+      const tipo = document.getElementById('desconto-tipo').value;
+      const valor = parseFloat(document.getElementById('desconto-valor').value) || 0;
+      if (valor <= 0 || subtotal <= 0) return 0;
+      let desconto = tipo === 'percentual' ? subtotal * (valor / 100) : valor;
+      if (desconto > subtotal) desconto = subtotal;
+      if (desconto < 0) desconto = 0;
+      return desconto;
+    }
+
+    function renderizarItens() {
+      const container = document.getElementById('lista-itens');
+      container.innerHTML = '';
+      let subtotal = 0;
+
+      itensVenda.forEach((item, index) => {
+        const itemSubtotal = item.quantidade * item.preco_unitario;
+        subtotal += itemSubtotal;
+        container.innerHTML += `
+          <div class="item-venda">
+            <span>${item.quantidade}x ${item.nome} — ${formatarMoeda(itemSubtotal)}</span>
+            <button type="button" onclick="removerItem(${index})">Remover</button>
+          </div>
+        `;
+      });
+
+      const totalDiv = document.getElementById('total-venda');
+      if (itensVenda.length === 0) {
+        totalDiv.innerHTML = '';
+        return;
+      }
+
+      const desconto = calcularDescontoReais(subtotal);
+      const total = subtotal - desconto;
+
+      totalDiv.innerHTML = `
+        <div class="total-linha"><span>Subtotal</span><span>${formatarMoeda(subtotal)}</span></div>
+        ${desconto > 0 ? `<div class="total-linha total-desconto"><span>Desconto</span><span>− ${formatarMoeda(desconto)}</span></div>` : ''}
+        <div class="total-linha total-final"><span>Total</span><span>${formatarMoeda(total)}</span></div>
+      `;
+    }
+
+    document.getElementById('desconto-tipo').addEventListener('change', renderizarItens);
+    document.getElementById('desconto-valor').addEventListener('input', renderizarItens);
+
+    function removerItem(index) {
+      itensVenda.splice(index, 1);
+      renderizarItens();
+    }
+
+    document.getElementById('btn-add-item').addEventListener('click', () => {
+      const quantidade = parseInt(document.getElementById('quantidade').value);
+
+      if (!produtoSelecionado) {
+        mostrarToast('Busque e selecione um produto', 'erro');
+        return;
+      }
+      if (!quantidade || quantidade < 1) {
+        mostrarToast('Informe uma quantidade válida', 'erro');
+        return;
+      }
+
+      itensVenda.push({
+        produto_id: produtoSelecionado.produto_id,
+        nome: produtoSelecionado.nome,
+        quantidade: quantidade,
+        preco_unitario: produtoSelecionado.preco,
+      });
+
+      renderizarItens();
+
+      produtoSelecionado = null;
+      document.getElementById('busca-produto').value = '';
+      document.getElementById('quantidade').value = 1;
+    });
+
+    document.getElementById('form-venda').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      if (itensVenda.length === 0) {
+        mostrarToast('Adicione ao menos um item à venda', 'erro');
+        return;
+      }
+
+      const subtotal = itensVenda.reduce((soma, i) => soma + i.quantidade * i.preco_unitario, 0);
+      const desconto = calcularDescontoReais(subtotal);
+
+      const dados = {
+        cliente_id: document.getElementById('cliente').value,
+        funcionario_id: usuarioLogado.funcionario_id,
+        forma_pagamento: document.getElementById('pagamento').value,
+        desconto: desconto,
+        itens: itensVenda.map(i => ({
+          produto_id: i.produto_id,
+          quantidade: i.quantidade,
+          preco_unitario: i.preco_unitario,
+        })),
+      };
+
+      const resultado = await apiPost('/api/vendas', dados);
+
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+      } else {
+        mostrarToast(`✔ ${resultado.mensagem} (venda #${resultado.venda_id})`, 'sucesso');
+
+        const nomeCliente = document.getElementById('cliente').selectedOptions[0]?.textContent ?? '';
+        abrirRecibo(resultado.venda_id, nomeCliente, usuarioLogado.nome, dados.forma_pagamento, itensVenda, desconto);
+
+        itensVenda = [];
+        document.getElementById('desconto-valor').value = 0;
+        renderizarItens();
+        carregarProdutos(); // atualiza estoque na lista
+      }
+    });
+
+    function abrirRecibo(vendaId, nomeCliente, nomeFuncionario, formaPagamento, itens, desconto) {
+      let subtotal = 0;
+      const linhas = itens.map(i => {
+        const itemSubtotal = i.quantidade * i.preco_unitario;
+        subtotal += itemSubtotal;
+        return `
+          <div class="recibo-item">
+            <span>${i.quantidade}x ${i.nome}</span>
+            <span>${formatarMoeda(itemSubtotal)}</span>
+          </div>
+        `;
+      }).join('');
+
+      const total = subtotal - desconto;
+
+      document.getElementById('recibo-conteudo').innerHTML = `
+        <h2>🛒 Mini PDV</h2>
+        <p class="recibo-sub">Comprovante de venda #${vendaId}</p>
+        <div class="recibo-linha"><span>Data</span><span>${formatarData(new Date().toISOString())}</span></div>
+        <div class="recibo-linha"><span>Cliente</span><span>${nomeCliente}</span></div>
+        <div class="recibo-linha"><span>Funcionário</span><span>${nomeFuncionario}</span></div>
+        <div class="recibo-linha"><span>Pagamento</span><span>${formaPagamento}</span></div>
+        <hr>
+        ${linhas}
+        <hr>
+        <div class="recibo-linha"><span>Subtotal</span><span>${formatarMoeda(subtotal)}</span></div>
+        ${desconto > 0 ? `<div class="recibo-linha"><span>Desconto</span><span>− ${formatarMoeda(desconto)}</span></div>` : ''}
+        <div class="recibo-total"><span>Total</span><span>${formatarMoeda(total)}</span></div>
+        <p class="recibo-rodape">Obrigado pela preferência! 💜</p>
+      `;
+
+      document.getElementById('modal-recibo').classList.add('ativo');
+    }
+
+    document.getElementById('btn-fechar-recibo').addEventListener('click', () => {
+      document.getElementById('modal-recibo').classList.remove('ativo');
+    });
+
+    document.getElementById('btn-imprimir-recibo').addEventListener('click', () => {
+      window.print();
+    });
+
+    carregarClientes();
+    carregarProdutos();
+  </script>
+</body>
+</html>
