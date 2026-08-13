@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Contas a Receber - Mini PDV</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="style_roxo.css">
+  <script>document.documentElement.setAttribute('data-tema', localStorage.getItem('tema') || 'escuro');</script>
+</head>
+<body>
+  <div class="container">
+    <h1>💵 Contas a Receber</h1>
+    <p class="subtitulo">Vendas fiado e a situação de pagamento de cada uma.</p>
+
+    <section class="stats-grid" id="stats-financeiro">
+      <div class="stat-card">
+        <span class="stat-label">Pendente</span>
+        <span class="stat-valor" id="stat-pendente">—</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Vencido</span>
+        <span class="stat-valor" id="stat-vencido">—</span>
+      </div>
+      <div class="stat-card destaque">
+        <span class="stat-label">Recebido (no filtro atual)</span>
+        <span class="stat-valor" id="stat-recebido">—</span>
+      </div>
+    </section>
+
+    <div class="filtros-periodo">
+      <div class="filtros-periodo-datas">
+        <label for="filtro-de">De</label>
+        <input type="date" id="filtro-de">
+        <label for="filtro-ate">Até</label>
+        <input type="date" id="filtro-ate">
+      </div>
+      <div class="filtros-periodo-atalhos">
+        <button type="button" class="secundario" onclick="definirPeriodo(0)">Hoje</button>
+        <button type="button" class="secundario" onclick="definirPeriodo(6)">7 dias</button>
+        <button type="button" class="secundario" onclick="definirPeriodo(29)">30 dias</button>
+        <button type="button" class="secundario" onclick="definirPeriodo(null)">Tudo</button>
+      </div>
+    </div>
+
+    <div class="lista-header">
+      <input type="text" id="busca-cliente-financeiro" class="busca" placeholder="🔎 Buscar por cliente...">
+      <div style="display:flex; gap:8px;">
+        <select id="filtro-situacao">
+          <option value="ativas">Pendentes + Vencidas</option>
+          <option value="todas">Todas as vendas</option>
+          <option value="pendente">Só pendentes</option>
+          <option value="vencida">Só vencidas</option>
+          <option value="pago">Só pagas</option>
+          <option value="cancelada">Só canceladas</option>
+        </select>
+        <select id="filtro-pagamento-financeiro">
+          <option value="todas">Toda forma de pagamento</option>
+          <option value="Pix">Pix</option>
+          <option value="Cartão">Cartão</option>
+          <option value="Dinheiro">Dinheiro</option>
+          <option value="Fiado">Fiado</option>
+        </select>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Venda</th>
+          <th>Cliente</th>
+          <th>Data</th>
+          <th>Vencimento</th>
+          <th>Pagamento</th>
+          <th>Valor</th>
+          <th>Situação</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tabela-financeiro"></tbody>
+    </table>
+    <p class="grafico-vazio" id="financeiro-vazio" style="display:none;">Nada encontrado com esses filtros.</p>
+
+    <div id="detalhe-itens-financeiro" style="margin-top:20px;"></div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    exigirLogin();
+    exigirPermissao('pode_financeiro');
+    renderizarNavbar('financeiro');
+
+    let contas = [];
+
+    const ROTULOS_SITUACAO = {
+      pago: '💰 Pago',
+      pendente: '⏳ Pendente',
+      vencida: '🔴 Vencida',
+      cancelada: '✖ Cancelada',
+    };
+
+    async function carregarContas() {
+      contas = await apiGet('/api/financeiro');
+      contas.forEach(v => { v.situacao = calcularSituacaoPagamento(v); });
+      aplicarFiltros();
+    }
+
+    function aplicarFiltros() {
+      const de = document.getElementById('filtro-de').value;
+      const ate = document.getElementById('filtro-ate').value;
+      const situacao = document.getElementById('filtro-situacao').value;
+      const pagamento = document.getElementById('filtro-pagamento-financeiro').value;
+      const buscaCliente = document.getElementById('busca-cliente-financeiro').value.trim().toLowerCase();
+
+      const filtradas = contas.filter(v => {
+        const dia = v.data_venda.slice(0, 10);
+        if (de && dia < de) return false;
+        if (ate && dia > ate) return false;
+        if (pagamento !== 'todas' && v.forma_pagamento !== pagamento) return false;
+        if (buscaCliente && !v.cliente.toLowerCase().includes(buscaCliente)) return false;
+
+        if (situacao === 'ativas') return v.situacao === 'pendente' || v.situacao === 'vencida';
+        if (situacao === 'todas') return true;
+        return v.situacao === situacao;
+      });
+
+      renderizarStats();
+      renderizarTabela(filtradas);
+    }
+
+    function renderizarStats() {
+      const pendentes = contas.filter(v => v.situacao === 'pendente');
+      const vencidas = contas.filter(v => v.situacao === 'vencida');
+
+      document.getElementById('stat-pendente').textContent =
+        `${formatarMoeda(pendentes.reduce((s, v) => s + Number(v.total), 0))} (${pendentes.length})`;
+      document.getElementById('stat-vencido').textContent =
+        `${formatarMoeda(vencidas.reduce((s, v) => s + Number(v.total), 0))} (${vencidas.length})`;
+
+      const de = document.getElementById('filtro-de').value;
+      const ate = document.getElementById('filtro-ate').value;
+      const recebidas = contas.filter(v => {
+        if (v.situacao !== 'pago') return false;
+        const dia = v.data_venda.slice(0, 10);
+        if (de && dia < de) return false;
+        if (ate && dia > ate) return false;
+        return true;
+      });
+      document.getElementById('stat-recebido').textContent =
+        formatarMoeda(recebidas.reduce((s, v) => s + Number(v.total), 0));
+    }
+
+    function renderizarTabela(lista) {
+      const tbody = document.getElementById('tabela-financeiro');
+      document.getElementById('financeiro-vazio').style.display = lista.length === 0 ? 'block' : 'none';
+
+      tbody.innerHTML = lista.map(v => `
+        <tr class="${v.situacao === 'cancelada' ? 'linha-cancelada' : ''} ${v.situacao === 'vencida' ? 'linha-alerta' : ''}">
+          <td>#${v.venda_id}</td>
+          <td>${v.cliente}</td>
+          <td>${formatarData(v.data_venda)}</td>
+          <td>${v.data_vencimento ? formatarDataSimples(v.data_vencimento) : '—'}</td>
+          <td>${v.forma_pagamento}</td>
+          <td>${formatarMoeda(v.total)}</td>
+          <td><span class="badge-status badge-status-${v.situacao === 'pago' ? 'entregue' : v.situacao === 'vencida' ? 'cancelado' : v.situacao === 'cancelada' ? 'cancelado' : 'novo'}">${ROTULOS_SITUACAO[v.situacao]}</span></td>
+          <td class="acoes">
+            <button type="button" class="secundario" onclick="verItensFinanceiro(${v.venda_id})">Ver itens</button>
+            ${(v.situacao === 'pendente' || v.situacao === 'vencida') ? `<button type="button" onclick="marcarComoPago(${v.venda_id})">💰 Marcar pago</button>` : ''}
+            ${(v.situacao === 'pendente' || v.situacao === 'vencida') ? `<button type="button" class="icone perigo" onclick="cancelarConta(${v.venda_id})" title="Cancelar venda">✖</button>` : ''}
+          </td>
+        </tr>
+      `).join('');
+      animarLinhas(tbody);
+    }
+
+    function definirPeriodo(dias) {
+      if (dias === null) {
+        document.getElementById('filtro-de').value = '';
+        document.getElementById('filtro-ate').value = '';
+      } else {
+        const hoje = new Date();
+        const de = new Date(hoje);
+        de.setDate(de.getDate() - dias);
+        document.getElementById('filtro-de').value = de.toISOString().slice(0, 10);
+        document.getElementById('filtro-ate').value = hoje.toISOString().slice(0, 10);
+      }
+      aplicarFiltros();
+    }
+
+    ['filtro-de', 'filtro-ate', 'filtro-situacao', 'filtro-pagamento-financeiro'].forEach(id => {
+      document.getElementById(id).addEventListener('change', aplicarFiltros);
+    });
+    document.getElementById('busca-cliente-financeiro').addEventListener('input', aplicarFiltros);
+
+    async function marcarComoPago(vendaId) {
+      if (!confirm(`Confirmar recebimento da venda #${vendaId}?`)) return;
+
+      const resultado = await apiPut(`/api/financeiro/${vendaId}/pagar`, {});
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+      } else {
+        mostrarToast(`✔ ${resultado.mensagem}`, 'sucesso');
+        carregarContas();
+      }
+    }
+
+    async function cancelarConta(vendaId) {
+      if (!confirm(`Cancelar a venda #${vendaId}? O estoque dos itens será devolvido.`)) return;
+
+      const resultado = await apiPut(`/api/vendas/${vendaId}/cancelar`, {});
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+      } else {
+        mostrarToast(`✔ ${resultado.mensagem}`, 'sucesso');
+        carregarContas();
+      }
+    }
+
+    async function verItensFinanceiro(vendaId) {
+      const itens = await apiGet(`/api/vendas/${vendaId}/itens`);
+      const div = document.getElementById('detalhe-itens-financeiro');
+
+      const linhas = itens.map(i => `
+        <tr>
+          <td>${i.produto}</td>
+          <td>${i.quantidade}</td>
+          <td>${formatarMoeda(i.preco_unitario)}</td>
+          <td>${formatarMoeda(i.valor_total)}</td>
+        </tr>
+      `).join('');
+
+      div.innerHTML = `
+        <h2>Itens da venda #${vendaId}</h2>
+        <table>
+          <thead>
+            <tr><th>Produto</th><th>Qtd</th><th>Preço unit.</th><th>Subtotal</th></tr>
+          </thead>
+          <tbody>${linhas}</tbody>
+        </table>
+      `;
+      div.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    carregarContas();
+  </script>
+</body>
+</html>

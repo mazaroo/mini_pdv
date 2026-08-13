@@ -16,7 +16,7 @@ router.post('/login', async (req, res) => {
 
   try {
     const [rows] = await db.query(
-      `SELECT funcionario_id, nome, cargo, senha, is_admin, pode_produtos, pode_clientes, pode_vendas, pode_historico, pode_delivery
+      `SELECT funcionario_id, nome, cargo, senha, is_admin, pode_produtos, pode_clientes, pode_vendas, pode_historico, pode_delivery, pode_financeiro
        FROM funcionarios WHERE funcionario_id = ?`,
       [funcionario_id]
     );
@@ -42,6 +42,7 @@ router.post('/login', async (req, res) => {
       pode_vendas: !!funcionario.pode_vendas,
       pode_historico: !!funcionario.pode_historico,
       pode_delivery: !!funcionario.pode_delivery,
+      pode_financeiro: !!funcionario.pode_financeiro,
     });
   } catch (err) {
     console.error(err);

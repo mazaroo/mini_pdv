@@ -1362,6 +1362,15 @@ tr.linha-alerta:hover {
   text-align: left;
 }
 
+.modal-form-cliente {
+  max-width: 420px;
+  text-align: left;
+}
+
+.modal-form-cliente h2 {
+  margin-top: 0;
+}
+
 .modal-ficha-conteudo h2 {
   margin: 0 0 16px 0;
   text-align: left;

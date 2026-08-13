@@ -13,6 +13,7 @@ const dashboardRouter = require('./routes/dashboard');
 const authRouter = require('./routes/auth');
 const categoriasRouter = require('./routes/categorias');
 const pedidosRouter = require('./routes/pedidos');
+const financeiroRouter = require('./routes/financeiro');
 
 const app = express();
 // Hospedagens (Railway, Render, etc.) definem a porta certa sozinhas pela
@@ -34,6 +35,7 @@ app.use('/api/dashboard', dashboardRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/categorias', categoriasRouter);
 app.use('/api/pedidos', pedidosRouter);
+app.use('/api/financeiro', financeiroRouter);
 
 app.listen(PORTA, () => {
   console.log(`Servidor rodando em http://localhost:${PORTA}`);

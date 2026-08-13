@@ -102,10 +102,15 @@
     document.getElementById('filtro-ate').addEventListener('change', aplicarFiltro);
     document.getElementById('filtro-origem').addEventListener('change', aplicarFiltro);
 
+    const ROTULOS_SITUACAO = { pendente: '⏳ Pendente', vencida: '🔴 Vencida' };
+
     function renderizarVendas(lista) {
       const tbody = document.getElementById('tabela-vendas');
       tbody.innerHTML = '';
       lista.forEach(v => {
+        const situacao = calcularSituacaoPagamento(v);
+        const mostrarBadgeFiado = v.forma_pagamento === 'Fiado' && (situacao === 'pendente' || situacao === 'vencida');
+
         tbody.innerHTML += `
           <tr class="${v.cancelada ? 'linha-cancelada' : ''}">
             <td>#${v.venda_id}</td>
@@ -113,7 +118,7 @@
             <td>${v.cliente}</td>
             <td>${v.funcionario}</td>
             <td>${formatarData(v.data_venda)}</td>
-            <td>${v.forma_pagamento}</td>
+            <td>${v.forma_pagamento} ${mostrarBadgeFiado ? `<span class="badge-status badge-status-${situacao === 'vencida' ? 'cancelado' : 'novo'}">${ROTULOS_SITUACAO[situacao]}</span>` : ''}</td>
             <td>${formatarMoeda(v.total)} ${v.cancelada ? '<span class="badge-cancelada">cancelada</span>' : ''}</td>
             <td class="acoes">
               <button type="button" class="secundario" onclick="verItens(${v.venda_id})">Ver itens</button>

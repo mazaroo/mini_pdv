@@ -19,7 +19,7 @@ CREATE TABLE `clientes` (
   `data_cadastro` date DEFAULT (curdate()),
   PRIMARY KEY (`cliente_id`),
   UNIQUE KEY `cpf` (`cpf`)
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `funcionarios` (
   `funcionario_id` int NOT NULL AUTO_INCREMENT,
@@ -34,6 +34,7 @@ CREATE TABLE `funcionarios` (
   `pode_vendas` tinyint(1) NOT NULL DEFAULT '1',
   `pode_historico` tinyint(1) NOT NULL DEFAULT '1',
   `pode_delivery` tinyint(1) NOT NULL DEFAULT '0',
+  `pode_financeiro` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`funcionario_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -59,12 +60,15 @@ CREATE TABLE `vendas` (
   `cancelada` tinyint(1) NOT NULL DEFAULT '0',
   `origem` enum('balcao','delivery') NOT NULL DEFAULT 'balcao',
   `taxa_entrega` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `status_pagamento` enum('pago','pendente') NOT NULL DEFAULT 'pago',
+  `data_vencimento` date DEFAULT NULL,
+  `data_pagamento` datetime DEFAULT NULL,
   PRIMARY KEY (`venda_id`),
   KEY `cliente_id` (`cliente_id`),
   KEY `funcionario_id` (`funcionario_id`),
   CONSTRAINT `vendas_ibfk_1` FOREIGN KEY (`cliente_id`) REFERENCES `clientes` (`cliente_id`),
   CONSTRAINT `vendas_ibfk_2` FOREIGN KEY (`funcionario_id`) REFERENCES `funcionarios` (`funcionario_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=22 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `venda_itens` (
   `item_id` int NOT NULL AUTO_INCREMENT,
@@ -77,7 +81,7 @@ CREATE TABLE `venda_itens` (
   KEY `produto_id` (`produto_id`),
   CONSTRAINT `venda_itens_ibfk_1` FOREIGN KEY (`venda_id`) REFERENCES `vendas` (`venda_id`),
   CONSTRAINT `venda_itens_ibfk_2` FOREIGN KEY (`produto_id`) REFERENCES `produtos` (`produto_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=23 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=28 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `pedidos` (
   `pedido_id` int NOT NULL AUTO_INCREMENT,

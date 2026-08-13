@@ -13,7 +13,7 @@ router.get('/', async (req, res) => {
     // nunca devolve a coluna "senha" pro frontend
     const [rows] = await db.query(`
       SELECT funcionario_id, nome, cargo, salario, data_contratacao,
-             is_admin, pode_produtos, pode_clientes, pode_vendas, pode_historico, pode_delivery
+             is_admin, pode_produtos, pode_clientes, pode_vendas, pode_historico, pode_delivery, pode_financeiro
       FROM funcionarios
     `);
     res.json(rows);
@@ -25,7 +25,7 @@ router.get('/', async (req, res) => {
 
 // POST /funcionarios -> cadastra um novo funcionário (só admin)
 router.post('/', exigirAdmin, async (req, res) => {
-  const { nome, cargo, salario, senha, pode_produtos, pode_clientes, pode_vendas, pode_historico, pode_delivery } = req.body;
+  const { nome, cargo, salario, senha, pode_produtos, pode_clientes, pode_vendas, pode_historico, pode_delivery, pode_financeiro } = req.body;
 
   if (!nome || !senha) {
     return res.status(400).json({ erro: 'Nome e senha são obrigatórios' });
@@ -37,9 +37,9 @@ router.post('/', exigirAdmin, async (req, res) => {
   try {
     const hash = await bcrypt.hash(senha, 10);
     const [resultado] = await db.query(
-      `INSERT INTO funcionarios (nome, cargo, salario, senha, data_contratacao, pode_produtos, pode_clientes, pode_vendas, pode_historico, pode_delivery)
-       VALUES (?, ?, ?, ?, CURDATE(), ?, ?, ?, ?, ?)`,
-      [nome, cargo || null, salario || null, hash, !!pode_produtos, !!pode_clientes, !!pode_vendas, !!pode_historico, !!pode_delivery]
+      `INSERT INTO funcionarios (nome, cargo, salario, senha, data_contratacao, pode_produtos, pode_clientes, pode_vendas, pode_historico, pode_delivery, pode_financeiro)
+       VALUES (?, ?, ?, ?, CURDATE(), ?, ?, ?, ?, ?, ?)`,
+      [nome, cargo || null, salario || null, hash, !!pode_produtos, !!pode_clientes, !!pode_vendas, !!pode_historico, !!pode_delivery, !!pode_financeiro]
     );
     res.json({ mensagem: 'Funcionário cadastrado com sucesso', id: resultado.insertId });
   } catch (err) {
@@ -50,7 +50,7 @@ router.post('/', exigirAdmin, async (req, res) => {
 
 // PUT /funcionarios/:id -> edita dados + permissões (só admin)
 router.put('/:id', exigirAdmin, async (req, res) => {
-  const { nome, cargo, salario, pode_produtos, pode_clientes, pode_vendas, pode_historico, pode_delivery } = req.body;
+  const { nome, cargo, salario, pode_produtos, pode_clientes, pode_vendas, pode_historico, pode_delivery, pode_financeiro } = req.body;
 
   if (!nome) {
     return res.status(400).json({ erro: 'Nome é obrigatório' });
@@ -59,9 +59,9 @@ router.put('/:id', exigirAdmin, async (req, res) => {
   try {
     await db.query(
       `UPDATE funcionarios
-       SET nome = ?, cargo = ?, salario = ?, pode_produtos = ?, pode_clientes = ?, pode_vendas = ?, pode_historico = ?, pode_delivery = ?
+       SET nome = ?, cargo = ?, salario = ?, pode_produtos = ?, pode_clientes = ?, pode_vendas = ?, pode_historico = ?, pode_delivery = ?, pode_financeiro = ?
        WHERE funcionario_id = ?`,
-      [nome, cargo || null, salario || null, !!pode_produtos, !!pode_clientes, !!pode_vendas, !!pode_historico, !!pode_delivery, req.params.id]
+      [nome, cargo || null, salario || null, !!pode_produtos, !!pode_clientes, !!pode_vendas, !!pode_historico, !!pode_delivery, !!pode_financeiro, req.params.id]
     );
     res.json({ mensagem: 'Funcionário atualizado com sucesso' });
   } catch (err) {

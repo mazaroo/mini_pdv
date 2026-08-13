@@ -13,7 +13,10 @@
 
     <form id="form-venda">
       <label for="cliente">Cliente</label>
-      <select id="cliente" required></select>
+      <div class="campo-com-acao">
+        <select id="cliente"></select>
+        <button type="button" id="btn-novo-cliente" class="secundario" title="Cadastrar cliente rápido">+ Novo</button>
+      </div>
 
       <label>Vendedor</label>
       <p id="vendedor-logado" class="campo-fixo"></p>
@@ -23,7 +26,13 @@
         <option value="Pix">Pix</option>
         <option value="Cartão">Cartão</option>
         <option value="Dinheiro">Dinheiro</option>
+        <option value="Fiado">Fiado</option>
       </select>
+
+      <div id="bloco-fiado" style="display:none;">
+        <label for="vencimento">Vencimento</label>
+        <input type="date" id="vencimento">
+      </div>
 
       <hr style="margin-top:20px;">
       <h3>Adicionar item</h3>
@@ -57,6 +66,28 @@
     </form>
   </div>
 
+  <div id="modal-novo-cliente" class="modal-overlay">
+    <div class="modal-recibo modal-form-cliente">
+      <h2>👤 Cadastrar cliente rápido</h2>
+      <label for="novo-cliente-nome">Nome</label>
+      <input type="text" id="novo-cliente-nome" required>
+
+      <label for="novo-cliente-cpf">CPF (opcional)</label>
+      <input type="text" id="novo-cliente-cpf" placeholder="000.000.000-00">
+
+      <label for="novo-cliente-telefone">Telefone (opcional)</label>
+      <input type="text" id="novo-cliente-telefone" placeholder="(00) 00000-0000">
+
+      <label for="novo-cliente-email">Email (opcional)</label>
+      <input type="email" id="novo-cliente-email">
+
+      <div class="modal-acoes">
+        <button type="button" id="btn-salvar-novo-cliente">Cadastrar e usar na venda</button>
+        <button type="button" id="btn-cancelar-novo-cliente" class="secundario">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
   <div id="modal-recibo" class="modal-overlay">
     <div class="modal-recibo">
       <div id="recibo-conteudo" class="recibo"></div>
@@ -79,12 +110,78 @@
     let produtosDisponiveis = [];
     let produtoSelecionado = null;
     let itensVenda = []; // { produto_id, nome, quantidade, preco_unitario }
+    let clientesDisponiveis = [];
 
     async function carregarClientes() {
-      const clientes = await apiGet('/api/clientes');
-      const select = document.getElementById('cliente');
-      select.innerHTML = clientes.map(c => `<option value="${c.cliente_id}">${c.nome}</option>`).join('');
+      clientesDisponiveis = await apiGet('/api/clientes');
+      renderizarSelectClientes();
     }
+
+    function renderizarSelectClientes(selecionarId) {
+      const select = document.getElementById('cliente');
+      const anterior = selecionarId ?? select.value;
+      select.innerHTML =
+        '<option value="">— Consumidor Final —</option>' +
+        clientesDisponiveis.map(c => `<option value="${c.cliente_id}">${c.nome}</option>`).join('');
+      if (anterior) select.value = anterior;
+    }
+
+    // ---------- cadastro rápido de cliente (sem sair da tela de venda) ----------
+
+    document.getElementById('btn-novo-cliente').addEventListener('click', () => {
+      document.getElementById('modal-novo-cliente').classList.add('ativo');
+      document.getElementById('novo-cliente-nome').focus();
+    });
+
+    document.getElementById('btn-cancelar-novo-cliente').addEventListener('click', fecharModalNovoCliente);
+
+    function fecharModalNovoCliente() {
+      document.getElementById('modal-novo-cliente').classList.remove('ativo');
+      document.getElementById('novo-cliente-nome').value = '';
+      document.getElementById('novo-cliente-cpf').value = '';
+      document.getElementById('novo-cliente-telefone').value = '';
+      document.getElementById('novo-cliente-email').value = '';
+    }
+
+    document.getElementById('novo-cliente-cpf').addEventListener('input', (e) => { e.target.value = mascararCPF(e.target.value); });
+    document.getElementById('novo-cliente-telefone').addEventListener('input', (e) => { e.target.value = mascararTelefone(e.target.value); });
+
+    document.getElementById('btn-salvar-novo-cliente').addEventListener('click', async () => {
+      const dados = {
+        nome: document.getElementById('novo-cliente-nome').value,
+        cpf: document.getElementById('novo-cliente-cpf').value,
+        telefone: document.getElementById('novo-cliente-telefone').value,
+        email: document.getElementById('novo-cliente-email').value,
+      };
+
+      if (!dados.nome.trim()) {
+        mostrarToast('Digite o nome do cliente', 'erro');
+        return;
+      }
+      if (dados.cpf && !validarCPF(dados.cpf)) {
+        mostrarToast('CPF inválido', 'erro');
+        return;
+      }
+      if (dados.telefone && !validarTelefone(dados.telefone)) {
+        mostrarToast('Telefone inválido. Use o formato (00) 00000-0000.', 'erro');
+        return;
+      }
+      if (dados.email && !validarEmail(dados.email)) {
+        mostrarToast('Email inválido', 'erro');
+        return;
+      }
+
+      const resultado = await apiPost('/api/clientes', dados);
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+        return;
+      }
+
+      mostrarToast(`✔ Cliente "${dados.nome}" cadastrado`, 'sucesso');
+      clientesDisponiveis.push({ cliente_id: resultado.id, nome: dados.nome });
+      renderizarSelectClientes(resultado.id); // já deixa selecionado na venda em andamento
+      fecharModalNovoCliente();
+    });
 
     async function carregarProdutos() {
       produtosDisponiveis = await apiGet('/api/produtos');
@@ -177,6 +274,11 @@
     document.getElementById('desconto-tipo').addEventListener('change', renderizarItens);
     document.getElementById('desconto-valor').addEventListener('input', renderizarItens);
 
+    document.getElementById('pagamento').addEventListener('change', (e) => {
+      const ehFiado = e.target.value === 'Fiado';
+      document.getElementById('bloco-fiado').style.display = ehFiado ? 'block' : 'none';
+    });
+
     function removerItem(index) {
       itensVenda.splice(index, 1);
       renderizarItens();
@@ -216,14 +318,28 @@
         return;
       }
 
+      const clienteId = document.getElementById('cliente').value || null;
+      const formaPagamento = document.getElementById('pagamento').value;
+      const vencimento = document.getElementById('vencimento').value;
+
+      if (formaPagamento === 'Fiado' && !clienteId) {
+        mostrarToast('Venda fiado precisa de um cliente cadastrado — escolha um ou cadastre com o botão "+ Novo"', 'erro');
+        return;
+      }
+      if (formaPagamento === 'Fiado' && !vencimento) {
+        mostrarToast('Escolha a data de vencimento do fiado', 'erro');
+        return;
+      }
+
       const subtotal = itensVenda.reduce((soma, i) => soma + i.quantidade * i.preco_unitario, 0);
       const desconto = calcularDescontoReais(subtotal);
 
       const dados = {
-        cliente_id: document.getElementById('cliente').value,
+        cliente_id: clienteId,
         funcionario_id: usuarioLogado.funcionario_id,
-        forma_pagamento: document.getElementById('pagamento').value,
+        forma_pagamento: formaPagamento,
         desconto: desconto,
+        data_vencimento: formaPagamento === 'Fiado' ? vencimento : null,
         itens: itensVenda.map(i => ({
           produto_id: i.produto_id,
           quantidade: i.quantidade,
@@ -238,17 +354,21 @@
       } else {
         mostrarToast(`✔ ${resultado.mensagem} (venda #${resultado.venda_id})`, 'sucesso');
 
-        const nomeCliente = document.getElementById('cliente').selectedOptions[0]?.textContent ?? '';
-        abrirRecibo(resultado.venda_id, nomeCliente, usuarioLogado.nome, dados.forma_pagamento, itensVenda, desconto);
+        const nomeCliente = document.getElementById('cliente').selectedOptions[0]?.textContent ?? 'Consumidor Final';
+        abrirRecibo(resultado.venda_id, nomeCliente, usuarioLogado.nome, formaPagamento, itensVenda, desconto, vencimento);
 
         itensVenda = [];
         document.getElementById('desconto-valor').value = 0;
+        document.getElementById('pagamento').value = 'Pix';
+        document.getElementById('bloco-fiado').style.display = 'none';
+        document.getElementById('vencimento').value = '';
+        renderizarSelectClientes('');
         renderizarItens();
         carregarProdutos(); // atualiza estoque na lista
       }
     });
 
-    function abrirRecibo(vendaId, nomeCliente, nomeFuncionario, formaPagamento, itens, desconto) {
+    function abrirRecibo(vendaId, nomeCliente, nomeFuncionario, formaPagamento, itens, desconto, vencimento) {
       let subtotal = 0;
       const linhas = itens.map(i => {
         const itemSubtotal = i.quantidade * i.preco_unitario;
@@ -270,6 +390,7 @@
         <div class="recibo-linha"><span>Cliente</span><span>${nomeCliente}</span></div>
         <div class="recibo-linha"><span>Funcionário</span><span>${nomeFuncionario}</span></div>
         <div class="recibo-linha"><span>Pagamento</span><span>${formaPagamento}</span></div>
+        ${formaPagamento === 'Fiado' && vencimento ? `<div class="recibo-linha"><span>Vencimento</span><span>${formatarDataSimples(vencimento)}</span></div>` : ''}
         <hr>
         ${linhas}
         <hr>

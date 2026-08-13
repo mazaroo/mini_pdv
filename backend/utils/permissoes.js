@@ -15,21 +15,25 @@ async function buscarFuncionario(req) {
   if (!funcionarioId) return null;
 
   const [rows] = await db.query(
-    'SELECT funcionario_id, is_admin, pode_produtos, pode_clientes, pode_vendas, pode_historico FROM funcionarios WHERE funcionario_id = ?',
+    'SELECT funcionario_id, is_admin, pode_produtos, pode_clientes, pode_vendas, pode_historico, pode_delivery, pode_financeiro FROM funcionarios WHERE funcionario_id = ?',
     [funcionarioId]
   );
   return rows[0] || null;
 }
 
-// Libera se o funcionário for admin OU tiver a permissão específica (ex.: 'pode_produtos')
-function exigirPermissao(nomePermissao) {
+// Libera se o funcionário for admin OU tiver a permissão específica (ex.: 'pode_produtos').
+// Também aceita uma lista (ex.: ['pode_vendas', 'pode_financeiro']) — libera se tiver QUALQUER uma delas.
+function exigirPermissao(permissoesAceitas) {
+  const lista = Array.isArray(permissoesAceitas) ? permissoesAceitas : [permissoesAceitas];
+
   return async (req, res, next) => {
     try {
       const funcionario = await buscarFuncionario(req);
       if (!funcionario) {
         return res.status(401).json({ erro: 'Faça login para continuar' });
       }
-      if (!funcionario.is_admin && !funcionario[nomePermissao]) {
+      const temAlguma = lista.some(nome => funcionario[nome]);
+      if (!funcionario.is_admin && !temAlguma) {
         return res.status(403).json({ erro: 'Você não tem permissão para fazer isso' });
       }
       next();

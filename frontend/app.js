@@ -198,6 +198,17 @@ function animarLinhas(tbody) {
   });
 }
 
+// Calcula a situação de pagamento de uma venda (pago/pendente/vencida/cancelada)
+// a partir dos campos que a API já devolve (cancelada, status_pagamento, data_vencimento)
+function calcularSituacaoPagamento(venda) {
+  if (venda.cancelada) return 'cancelada';
+  if (venda.status_pagamento === 'pago') return 'pago';
+  const hoje = new Date().toISOString().slice(0, 10);
+  const vencimento = venda.data_vencimento ? venda.data_vencimento.slice(0, 10) : null;
+  if (vencimento && vencimento < hoje) return 'vencida';
+  return 'pendente';
+}
+
 function formatarMoeda(valor) {
   return Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
@@ -206,6 +217,15 @@ function formatarData(dataString) {
   if (!dataString) return '';
   const data = new Date(dataString);
   return data.toLocaleString('pt-BR');
+}
+
+// Pra datas "só o dia" (vencimento, por exemplo) — NÃO usa o construtor Date,
+// porque "2026-09-12" vira meia-noite UTC e em fuso negativo (Brasil) o
+// toLocaleString mostra o dia 11, não o 12. Formata direto na string.
+function formatarDataSimples(dataString) {
+  if (!dataString) return '';
+  const [ano, mes, dia] = dataString.slice(0, 10).split('-');
+  return `${dia}/${mes}/${ano}`;
 }
 
 // Monta a barra de navegação fixa no topo, destacando a página atual.
@@ -220,6 +240,7 @@ function renderizarNavbar(paginaAtual) {
     { id: 'vendas', href: 'vendas.html', label: '💰 Nova Venda', permissao: 'pode_vendas' },
     { id: 'historico', href: 'historico.html', label: '📋 Histórico', permissao: 'pode_historico' },
     { id: 'delivery', href: 'delivery.html', label: '🛵 Delivery', permissao: 'pode_delivery' },
+    { id: 'financeiro', href: 'financeiro.html', label: '💵 Contas a Receber', permissao: 'pode_financeiro' },
   ];
 
   const paginas = todasPaginas.filter(p => {
