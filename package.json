@@ -1,0 +1,9 @@
+{
+  "name": "mini-pdv-root",
+  "private": true,
+  "description": "Wrapper só pra hospedagem (Railway etc). O projeto de verdade mora em backend/ — pra rodar localmente, sempre 'cd backend' e use os comandos de lá (ver README.md).",
+  "scripts": {
+    "postinstall": "cd backend && npm install",
+    "start": "cd backend && npm start"
+  }
+}
