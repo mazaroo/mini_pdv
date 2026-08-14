@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Relatórios - Mini PDV</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="style_roxo.css">
+  <script>document.documentElement.setAttribute('data-tema', localStorage.getItem('tema') || 'escuro');</script>
+</head>
+<body>
+  <div class="container">
+    <h1>📊 Relatórios</h1>
+    <p class="subtitulo">Escolha o relatório, aplique os filtros e gere o resultado.</p>
+
+    <section id="passo-categoria">
+      <h2>Escolha o relatório</h2>
+      <div class="menu-cards">
+        <button type="button" class="card" data-categoria="vendas">
+          <h2>📈 Relatório de Vendas</h2>
+          <p>Analítico ou sintético</p>
+        </button>
+        <button type="button" class="card" data-categoria="vendedor">
+          <h2>🧑‍💼 Relatório por Vendedor</h2>
+          <p>Ranking de vendas e faturamento por vendedor</p>
+        </button>
+        <button type="button" class="card" data-categoria="produtos">
+          <h2>📦 Relatório de Produtos</h2>
+          <p>Produtos mais vendidos por quantidade e faturamento</p>
+        </button>
+      </div>
+    </section>
+
+    <section id="passo-tipo" style="display:none;">
+      <a href="#" id="link-voltar-tipo">← Trocar relatório</a>
+      <h2>Tipo de relatório</h2>
+      <div class="menu-cards">
+        <button type="button" class="card" data-tipo="analitico">
+          <h2>Analítico</h2>
+          <p>Uma linha por venda: código, data, cliente, vendedor, pagamento, produtos e desconto</p>
+        </button>
+        <button type="button" class="card" data-tipo="sintetico">
+          <h2>Sintético</h2>
+          <p>Visão enxuta: código, data, cliente, vendedor e total</p>
+        </button>
+      </div>
+    </section>
+
+    <section id="passo-filtros" style="display:none;">
+      <a href="#" id="link-voltar-filtros">← Trocar relatório</a>
+      <h2 id="titulo-filtros"></h2>
+
+      <div class="filtros-periodo">
+        <div class="filtros-periodo-datas">
+          <label for="filtro-de">De</label>
+          <input type="date" id="filtro-de">
+          <label for="filtro-ate">Até</label>
+          <input type="date" id="filtro-ate">
+        </div>
+        <div class="filtros-periodo-atalhos">
+          <button type="button" class="secundario" onclick="definirPeriodo(0)">Hoje</button>
+          <button type="button" class="secundario" onclick="definirPeriodo(6)">7 dias</button>
+          <button type="button" class="secundario" onclick="definirPeriodo(29)">30 dias</button>
+          <button type="button" class="secundario" onclick="definirPeriodo(null)">Tudo</button>
+        </div>
+      </div>
+
+      <div class="lista-header">
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <select id="filtro-funcionario">
+            <option value="">Todo vendedor</option>
+          </select>
+          <select id="filtro-pagamento">
+            <option value="todas">Toda forma de pagamento</option>
+            <option value="Pix">Pix</option>
+            <option value="Cartão">Cartão</option>
+            <option value="Dinheiro">Dinheiro</option>
+            <option value="Fiado">Fiado</option>
+          </select>
+          <select id="filtro-origem">
+            <option value="todas">Toda origem</option>
+            <option value="balcao">Balcão</option>
+            <option value="delivery">Delivery</option>
+          </select>
+        </div>
+        <button type="button" id="btn-gerar-relatorio">Gerar relatório</button>
+      </div>
+    </section>
+
+    <section id="passo-resultado" style="display:none;">
+      <a href="#" id="link-voltar-resultado">← Trocar relatório</a>
+
+      <div class="lista-header">
+        <h2 id="titulo-resultado" style="margin:0;"></h2>
+        <div style="display:flex; gap:8px;">
+          <button type="button" id="btn-exportar-csv" class="secundario">⬇ Exportar CSV</button>
+          <button type="button" id="btn-gerar-pdf" class="secundario">🖨️ Gerar PDF</button>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr id="thead-resultado"></tr>
+        </thead>
+        <tbody id="tbody-resultado"></tbody>
+      </table>
+      <p class="grafico-vazio" id="resultado-vazio" style="display:none;">Nada encontrado com esses filtros.</p>
+    </section>
+  </div>
+
+  <div id="relatorio-para-impressao" style="display:none;"></div>
+
+  <script src="app.js"></script>
+  <script>
+    exigirLogin();
+    exigirPermissao('pode_relatorios');
+    renderizarNavbar('relatorios');
+
+    // Config de cada relatório: endpoint, título e colunas (chave no JSON de resposta,
+    // rótulo exibido e tipo — controla a formatação na tabela e no CSV).
+    const RELATORIOS = {
+      'vendas-analitico': {
+        titulo: 'Relatório de Vendas — Analítico',
+        endpoint: '/api/relatorios/vendas/analitico',
+        colunas: [
+          { chave: 'venda_id', rotulo: 'Código', tipo: 'codigo' },
+          { chave: 'data_venda', rotulo: 'Data', tipo: 'data' },
+          { chave: 'cliente', rotulo: 'Cliente', tipo: 'texto' },
+          { chave: 'vendedor', rotulo: 'Vendedor', tipo: 'texto' },
+          { chave: 'forma_pagamento', rotulo: 'Pagamento', tipo: 'texto' },
+          { chave: 'produtos', rotulo: 'Produtos', tipo: 'texto' },
+          { chave: 'desconto', rotulo: 'Desconto', tipo: 'moeda' },
+          { chave: 'total', rotulo: 'Total', tipo: 'moeda' },
+        ],
+      },
+      'vendas-sintetico': {
+        titulo: 'Relatório de Vendas — Sintético',
+        endpoint: '/api/relatorios/vendas/sintetico',
+        colunas: [
+          { chave: 'venda_id', rotulo: 'Código', tipo: 'codigo' },
+          { chave: 'data_venda', rotulo: 'Data', tipo: 'data' },
+          { chave: 'cliente', rotulo: 'Cliente', tipo: 'texto' },
+          { chave: 'vendedor', rotulo: 'Vendedor', tipo: 'texto' },
+          { chave: 'total', rotulo: 'Total', tipo: 'moeda' },
+        ],
+      },
+      vendedor: {
+        titulo: 'Relatório por Vendedor',
+        endpoint: '/api/relatorios/por-funcionario',
+        colunas: [
+          { chave: 'funcionario', rotulo: 'Vendedor', tipo: 'texto' },
+          { chave: 'total_vendas', rotulo: 'Vendas', tipo: 'numero' },
+          { chave: 'faturamento', rotulo: 'Faturamento', tipo: 'moeda' },
+        ],
+      },
+      produtos: {
+        titulo: 'Relatório de Produtos Mais Vendidos',
+        endpoint: '/api/relatorios/por-produto',
+        colunas: [
+          { chave: 'nome', rotulo: 'Produto', tipo: 'texto' },
+          { chave: 'quantidade_vendida', rotulo: 'Quantidade vendida', tipo: 'numero' },
+          { chave: 'faturamento_bruto', rotulo: 'Faturamento bruto', tipo: 'moeda' },
+        ],
+      },
+    };
+
+    let categoriaAtual = null; // 'vendas' | 'vendedor' | 'produtos'
+    let tipoAtual = null;      // 'analitico' | 'sintetico' (só quando categoriaAtual === 'vendas')
+    let configAtual = null;    // aponta pra um valor de RELATORIOS
+    let dadosAtuais = [];      // último resultado buscado (usado no CSV/PDF)
+
+    function chaveRelatorioAtual() {
+      return categoriaAtual === 'vendas' ? `vendas-${tipoAtual}` : categoriaAtual;
+    }
+
+    // ---------- navegação entre os passos ----------
+
+    function mostrarPasso(id) {
+      ['passo-categoria', 'passo-tipo', 'passo-filtros', 'passo-resultado'].forEach(p => {
+        document.getElementById(p).style.display = p === id ? '' : 'none';
+      });
+    }
+
+    function irParaCategoria(e) {
+      if (e) e.preventDefault();
+      categoriaAtual = null;
+      tipoAtual = null;
+      mostrarPasso('passo-categoria');
+    }
+
+    document.querySelectorAll('#passo-categoria [data-categoria]').forEach(botao => {
+      botao.addEventListener('click', () => {
+        categoriaAtual = botao.dataset.categoria;
+        if (categoriaAtual === 'vendas') {
+          mostrarPasso('passo-tipo');
+        } else {
+          irParaFiltros();
+        }
+      });
+    });
+
+    document.querySelectorAll('#passo-tipo [data-tipo]').forEach(botao => {
+      botao.addEventListener('click', () => {
+        tipoAtual = botao.dataset.tipo;
+        irParaFiltros();
+      });
+    });
+
+    document.getElementById('link-voltar-tipo').addEventListener('click', irParaCategoria);
+    document.getElementById('link-voltar-filtros').addEventListener('click', irParaCategoria);
+    document.getElementById('link-voltar-resultado').addEventListener('click', irParaCategoria);
+
+    function irParaFiltros() {
+      configAtual = RELATORIOS[chaveRelatorioAtual()];
+      document.getElementById('titulo-filtros').textContent = configAtual.titulo;
+      mostrarPasso('passo-filtros');
+    }
+
+    // ---------- filtros ----------
+
+    async function carregarFuncionariosFiltro() {
+      const funcionarios = await apiGet('/api/funcionarios');
+      const select = document.getElementById('filtro-funcionario');
+      select.innerHTML = '<option value="">Todo vendedor</option>' +
+        funcionarios.map(f => `<option value="${f.funcionario_id}">${f.nome}</option>`).join('');
+    }
+
+    function montarQueryString() {
+      const params = new URLSearchParams();
+      const de = document.getElementById('filtro-de').value;
+      const ate = document.getElementById('filtro-ate').value;
+      const funcionarioId = document.getElementById('filtro-funcionario').value;
+      const pagamento = document.getElementById('filtro-pagamento').value;
+      const origem = document.getElementById('filtro-origem').value;
+
+      if (de) params.set('de', de);
+      if (ate) params.set('ate', ate);
+      if (funcionarioId) params.set('funcionario_id', funcionarioId);
+      if (pagamento) params.set('forma_pagamento', pagamento);
+      if (origem) params.set('origem', origem);
+
+      return params.toString();
+    }
+
+    function definirPeriodo(dias) {
+      if (dias === null) {
+        document.getElementById('filtro-de').value = '';
+        document.getElementById('filtro-ate').value = '';
+      } else {
+        const hoje = new Date();
+        const de = new Date(hoje);
+        de.setDate(de.getDate() - dias);
+        document.getElementById('filtro-de').value = de.toISOString().slice(0, 10);
+        document.getElementById('filtro-ate').value = hoje.toISOString().slice(0, 10);
+      }
+    }
+
+    // ---------- gerar / renderizar resultado ----------
+
+    document.getElementById('btn-gerar-relatorio').addEventListener('click', gerarRelatorio);
+
+    async function gerarRelatorio() {
+      const qs = montarQueryString();
+      dadosAtuais = await apiGet(`${configAtual.endpoint}?${qs}`);
+      document.getElementById('titulo-resultado').textContent = configAtual.titulo;
+      renderizarTabela();
+      mostrarPasso('passo-resultado');
+    }
+
+    function formatarCelula(valor, tipo) {
+      if (tipo === 'moeda') return formatarMoeda(valor);
+      if (tipo === 'data') return formatarData(valor);
+      if (tipo === 'codigo') return `#${valor}`;
+      return valor ?? '—';
+    }
+
+    function renderizarTabela() {
+      const thead = document.getElementById('thead-resultado');
+      const tbody = document.getElementById('tbody-resultado');
+
+      thead.innerHTML = configAtual.colunas.map(c => `<th>${c.rotulo}</th>`).join('');
+
+      document.getElementById('resultado-vazio').style.display = dadosAtuais.length === 0 ? 'block' : 'none';
+      tbody.innerHTML = dadosAtuais.map(linha => `
+        <tr>${configAtual.colunas.map(c => `<td>${formatarCelula(linha[c.chave], c.tipo)}</td>`).join('')}</tr>
+      `).join('');
+      animarLinhas(tbody);
+    }
+
+    // ---------- exportar CSV ----------
+
+    document.getElementById('btn-exportar-csv').addEventListener('click', () => {
+      if (dadosAtuais.length === 0) {
+        mostrarToast('Nada para exportar com esses filtros', 'erro');
+        return;
+      }
+
+      const cabecalhos = configAtual.colunas.map(c => c.rotulo);
+      const linhas = dadosAtuais.map(linha => configAtual.colunas.map(c => {
+        const valor = linha[c.chave];
+        if (c.tipo === 'moeda') return Number(valor).toFixed(2).replace('.', ',');
+        if (c.tipo === 'data') return formatarData(valor);
+        if (c.tipo === 'codigo') return valor;
+        return valor ?? '';
+      }));
+
+      exportarCSV(
+        `${chaveRelatorioAtual()}-${new Date().toISOString().slice(0, 10)}.csv`,
+        cabecalhos,
+        linhas
+      );
+      mostrarToast('✔ CSV exportado', 'sucesso');
+    });
+
+    // ---------- gerar PDF (impressão do navegador) ----------
+
+    document.getElementById('btn-gerar-pdf').addEventListener('click', () => {
+      if (dadosAtuais.length === 0) {
+        mostrarToast('Nada para gerar PDF com esses filtros', 'erro');
+        return;
+      }
+
+      const de = document.getElementById('filtro-de').value;
+      const ate = document.getElementById('filtro-ate').value;
+      const periodoTexto = (de || ate) ? `Período: ${de ? formatarDataSimples(de) : 'início'} até ${ate ? formatarDataSimples(ate) : 'hoje'}` : 'Período: todas as datas';
+
+      const cabecalho = `<tr>${configAtual.colunas.map(c => `<th>${c.rotulo}</th>`).join('')}</tr>`;
+      const linhas = dadosAtuais.map(linha => `
+        <tr>${configAtual.colunas.map(c => `<td>${formatarCelula(linha[c.chave], c.tipo)}</td>`).join('')}</tr>
+      `).join('');
+
+      document.getElementById('relatorio-para-impressao').innerHTML = `
+        <h2>${configAtual.titulo}</h2>
+        <p>${periodoTexto} · Gerado em ${formatarData(new Date().toISOString())}</p>
+        <table><thead>${cabecalho}</thead><tbody>${linhas}</tbody></table>
+      `;
+
+      document.body.classList.add('imprimindo-relatorio');
+      window.print();
+    });
+
+    window.addEventListener('afterprint', () => {
+      document.body.classList.remove('imprimindo-relatorio');
+    });
+
+    carregarFuncionariosFiltro();
+  </script>
+</body>
+</html>

@@ -15,7 +15,7 @@ async function buscarFuncionario(req) {
   if (!funcionarioId) return null;
 
   const [rows] = await db.query(
-    'SELECT funcionario_id, is_admin, pode_produtos, pode_clientes, pode_vendas, pode_historico, pode_delivery, pode_financeiro FROM funcionarios WHERE funcionario_id = ?',
+    'SELECT funcionario_id, is_admin, pode_produtos, pode_clientes, pode_vendas, pode_historico, pode_delivery, pode_financeiro, pode_relatorios FROM funcionarios WHERE funcionario_id = ?',
     [funcionarioId]
   );
   return rows[0] || null;

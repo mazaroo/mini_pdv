@@ -35,6 +35,7 @@ CREATE TABLE `funcionarios` (
   `pode_historico` tinyint(1) NOT NULL DEFAULT '1',
   `pode_delivery` tinyint(1) NOT NULL DEFAULT '0',
   `pode_financeiro` tinyint(1) NOT NULL DEFAULT '0',
+  `pode_relatorios` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`funcionario_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 

@@ -241,6 +241,7 @@ function renderizarNavbar(paginaAtual) {
     { id: 'historico', href: 'historico.html', label: '📋 Histórico', permissao: 'pode_historico' },
     { id: 'delivery', href: 'delivery.html', label: '🛵 Delivery', permissao: 'pode_delivery' },
     { id: 'financeiro', href: 'financeiro.html', label: '💵 Contas a Receber', permissao: 'pode_financeiro' },
+    { id: 'relatorios', href: 'relatorios.html', label: '📊 Relatórios', permissao: 'pode_relatorios' },
   ];
 
   const paginas = todasPaginas.filter(p => {

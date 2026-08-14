@@ -33,6 +33,7 @@
         <label class="check"><input type="checkbox" id="perm-historico"> 📋 Ver histórico de vendas</label>
         <label class="check"><input type="checkbox" id="perm-delivery"> 🛵 Gerenciar delivery</label>
         <label class="check"><input type="checkbox" id="perm-financeiro"> 💵 Contas a receber</label>
+        <label class="check"><input type="checkbox" id="perm-relatorios"> 📊 Ver relatórios</label>
       </div>
 
       <button type="submit" id="btn-salvar">Cadastrar funcionário</button>
@@ -51,6 +52,7 @@
           <th>Histórico</th>
           <th>Delivery</th>
           <th>Financeiro</th>
+          <th>Relatórios</th>
           <th></th>
         </tr>
       </thead>
@@ -92,7 +94,7 @@
             <tr>
               <td>${f.nome}</td>
               <td>${f.cargo ?? ''}</td>
-              <td colspan="6"><span class="badge-admin">👑 Administrador — acesso total</span></td>
+              <td colspan="7"><span class="badge-admin">👑 Administrador — acesso total</span></td>
               <td class="acoes">${f.funcionario_id === usuarioAtual.funcionario_id ? '' : ''}</td>
             </tr>
           `;
@@ -109,6 +111,7 @@
             <td>${marcador(f.pode_historico)}</td>
             <td>${marcador(f.pode_delivery)}</td>
             <td>${marcador(f.pode_financeiro)}</td>
+            <td>${marcador(f.pode_relatorios)}</td>
             <td class="acoes">
               <button type="button" class="icone" onclick="editarFuncionario(${f.funcionario_id})" title="Editar">✏️</button>
               <button type="button" class="icone" onclick="redefinirSenha(${f.funcionario_id})" title="Redefinir senha">🔑</button>
@@ -134,6 +137,7 @@
       document.getElementById('perm-historico').checked = !!f.pode_historico;
       document.getElementById('perm-delivery').checked = !!f.pode_delivery;
       document.getElementById('perm-financeiro').checked = !!f.pode_financeiro;
+      document.getElementById('perm-relatorios').checked = !!f.pode_relatorios;
 
       campoSenha.style.display = 'none';
       labelSenha.style.display = 'none';
@@ -197,6 +201,7 @@
         pode_historico: document.getElementById('perm-historico').checked,
         pode_delivery: document.getElementById('perm-delivery').checked,
         pode_financeiro: document.getElementById('perm-financeiro').checked,
+        pode_relatorios: document.getElementById('perm-relatorios').checked,
       };
 
       if (!editandoId) {

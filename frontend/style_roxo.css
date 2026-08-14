@@ -1355,6 +1355,49 @@ tr.linha-alerta:hover {
   }
 }
 
+/* ---------- impressão de relatórios (relatorios.html) ---------- */
+/* Cores fixas (preto no branco), independente do tema ativo, pra garantir legibilidade no papel */
+
+@media print {
+  body.imprimindo-relatorio * {
+    visibility: hidden;
+  }
+  body.imprimindo-relatorio #relatorio-para-impressao,
+  body.imprimindo-relatorio #relatorio-para-impressao * {
+    visibility: visible;
+  }
+  body.imprimindo-relatorio #relatorio-para-impressao {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background: #fff;
+    color: #000;
+    padding: 20px;
+  }
+  body.imprimindo-relatorio #relatorio-para-impressao h2 {
+    margin: 0 0 4px 0;
+    color: #000;
+  }
+  body.imprimindo-relatorio #relatorio-para-impressao p {
+    margin: 0 0 16px 0;
+    color: #333;
+    font-size: 13px;
+  }
+  body.imprimindo-relatorio #relatorio-para-impressao table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  body.imprimindo-relatorio #relatorio-para-impressao th,
+  body.imprimindo-relatorio #relatorio-para-impressao td {
+    border: 1px solid #999;
+    padding: 6px 8px;
+    color: #000;
+    text-align: left;
+    font-size: 12px;
+  }
+}
+
 /* ---------- ficha do cliente ---------- */
 
 .modal-ficha-conteudo {
