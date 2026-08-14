@@ -18,8 +18,7 @@ No terminal, dentro da pasta do projeto:
 
 ```bash
 git remote add origin https://github.com/SEU_USUARIO/mini-pdv.git
-git branch -M main
-git push -u origin main
+git push -u origin master
 ```
 
 Se pedir login, use seu usuário do GitHub — se pedir senha, o GitHub não aceita mais
@@ -46,11 +45,15 @@ lugar, e faz redeploy sozinho toda vez que alguém dá push no GitHub.
 
 1. Crie uma conta em https://railway.app (dá pra entrar direto com GitHub)
 2. **New Project → Deploy from GitHub repo** → escolha `mini-pdv`
-3. Railway vai tentar rodar o projeto a partir da raiz do repositório — como o
-   backend fica em `backend/`, entre nas configurações desse serviço
-   (**Settings → Root Directory**) e defina: `backend`
-4. Em **Settings → Deploy**, confirme que o start command é `npm start` (já é o
-   padrão, não precisa mexer)
+3. **Deixe o "Root Directory" vazio (raiz do repositório)** — **não** aponte pra
+   `backend`. O `package.json` que existe na raiz do projeto já sabe entrar em
+   `backend/` sozinho pra instalar e rodar (`postinstall` + `start`); ele existe
+   exatamente pra isso. Se você apontar o Root Directory pra `backend`, o Railway
+   passa a enxergar **só** aquela pasta — a pasta `frontend/`, que é irmã dela,
+   fica de fora do build, e o site carrega a API mas não a interface (dá erro
+   "Cannot GET /"). Foi exatamente esse o problema que tivemos e corrigimos.
+4. Em **Settings → Networking → Public Networking**, clique em **Generate Domain**
+   — isso cria a URL pública do site (tipo `algumacoisa.up.railway.app`)
 
 ### 4.2. Adicionar o banco MySQL
 
@@ -68,23 +71,53 @@ DB_HOST=${{MySQL.MYSQLHOST}}
 DB_PORT=${{MySQL.MYSQLPORT}}
 DB_USER=${{MySQL.MYSQLUSER}}
 DB_PASSWORD=${{MySQL.MYSQLPASSWORD}}
-DB_NAME=${{MySQL.MYSQLDATABASE}}
+DB_NAME=pdv
 ```
+
+⚠️ **`DB_NAME` é o texto fixo `pdv`, não uma referência.** O MySQL do Railway já
+nasce com um banco padrão chamado `railway` — mas o nosso projeto usa um banco
+chamado `pdv` (é o que o `schema.sql` cria). Se você deixar `DB_NAME` referenciando
+`${{MySQL.MYSQLDATABASE}}`, ele aponta pro banco `railway` (errado, vazio) em vez
+do `pdv` de verdade.
 
 ### 4.4. Criar as tabelas (uma vez só)
 
-O banco novo nasce **vazio**. No serviço MySQL do Railway, abra a aba **Data** (ou
-conecte por fora com um cliente MySQL usando as credenciais que aparecem em
-**Connect**) e rode, nessa ordem:
+O banco `pdv` não existe até você rodar o `schema.sql` — o Railway não cria isso
+sozinho. Duas formas de fazer:
 
-1. O conteúdo de [`schema.sql`](schema.sql) (cria todas as tabelas)
-2. O conteúdo de [`seed.sql`](seed.sql) (cria o login `admin` / `12345`)
+**Opção A — cliente MySQL (Workbench, extensão do VS Code, etc.):**
+1. No serviço MySQL → **Settings → Networking → Public Networking**, clique em
+   "Add Public Access" se ainda não tiver um endereço público gerado. Isso dá um
+   host tipo `algumacoisa.proxy.rlwy.net` com uma porta própria (não é a 3306)
+2. Conecta usando esse host/porta públicos + usuário `root` + a senha (em
+   **Variables**, campo `MYSQL_ROOT_PASSWORD`)
+3. Roda o conteúdo de [`schema.sql`](schema.sql) (cria o banco `pdv` e as tabelas)
+4. Roda o conteúdo de [`seed.sql`](seed.sql) (cria o login `admin` / `12345`)
+
+**Opção B — Node direto do terminal**, já que o projeto usa `mysql2`:
+```bash
+cd backend
+node -e "
+const mysql = require('mysql2/promise');
+const fs = require('fs');
+(async () => {
+  const conn = await mysql.createConnection({
+    host: 'SEU_HOST_PUBLICO', port: SUA_PORTA_PUBLICA,
+    user: 'root', password: 'SUA_SENHA', multipleStatements: true,
+  });
+  await conn.query(fs.readFileSync('../schema.sql', 'utf8'));
+  await conn.query(fs.readFileSync('../seed.sql', 'utf8'));
+  console.log('Pronto.');
+  await conn.end();
+})();
+"
+```
 
 ### 4.5. Pronto
 
-Railway vai te dar uma URL pública (tipo `mini-pdv-production.up.railway.app`) —
-esse é o site ao vivo. A partir de agora, **todo `git push` na branch `main` dispara
-um redeploy automático** — é exatamente o "atualiza sozinho" que você pediu.
+A URL que você gerou no passo 4.1 é o site ao vivo. A partir de agora, **todo
+`git push` na branch `master` dispara um redeploy automático** — é exatamente o
+"atualiza sozinho" que você pediu.
 
 ## ⚠️ Limitações que vale saber
 
