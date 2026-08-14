@@ -42,11 +42,13 @@ CREATE TABLE `funcionarios` (
 CREATE TABLE `produtos` (
   `produto_id` int NOT NULL AUTO_INCREMENT,
   `nome` varchar(100) NOT NULL,
+  `codigo_barras` varchar(13) DEFAULT NULL,
   `categoria_id` int DEFAULT NULL,
   `preco` decimal(10,2) NOT NULL,
   `estoque` int DEFAULT '0',
   `imagem` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`produto_id`),
+  UNIQUE KEY `codigo_barras` (`codigo_barras`),
   KEY `categoria_id` (`categoria_id`),
   CONSTRAINT `produtos_ibfk_1` FOREIGN KEY (`categoria_id`) REFERENCES `categorias` (`categoria_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

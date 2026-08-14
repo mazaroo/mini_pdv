@@ -7,12 +7,13 @@ const path = require('path');
 const multer = require('multer');
 const db = require('../db');
 const { exigirPermissao } = require('../utils/permissoes');
+const { validarCodigoBarras } = require('../utils/validadores');
 
 // GET /produtos -> lista todos os produtos, já com o nome da categoria (INNER JOIN)
 router.get('/', async (req, res) => {
   try {
     const [rows] = await db.query(`
-      SELECT p.produto_id, p.nome, p.preco, p.estoque, p.imagem, c.nome AS categoria
+      SELECT p.produto_id, p.nome, p.codigo_barras, p.categoria_id, p.preco, p.estoque, p.imagem, c.nome AS categoria
       FROM produtos p
       INNER JOIN categorias c ON p.categoria_id = c.categoria_id
       ORDER BY p.produto_id ASC
@@ -24,41 +25,66 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /produtos -> cadastra um novo produto
+// POST /produtos -> cadastra um novo produto.
+// Código de barras é opcional: se vier em branco, o produto é criado sem ele e,
+// já sabendo o produto_id gerado, um segundo UPDATE preenche o código com esse ID.
 router.post('/', exigirPermissao('pode_produtos'), async (req, res) => {
-  const { nome, categoria_id, preco, estoque } = req.body;
+  const { nome, codigo_barras, categoria_id, preco, estoque } = req.body;
 
   if (!nome || !categoria_id || !preco) {
     return res.status(400).json({ erro: 'Nome, categoria e preço são obrigatórios' });
   }
+  if (codigo_barras && !validarCodigoBarras(codigo_barras)) {
+    return res.status(400).json({ erro: 'Código de barras deve ter só números, até 13 dígitos' });
+  }
 
   try {
     const [resultado] = await db.query(
-      'INSERT INTO produtos (nome, categoria_id, preco, estoque) VALUES (?, ?, ?, ?)',
-      [nome, categoria_id, preco, estoque || 0]
+      'INSERT INTO produtos (nome, codigo_barras, categoria_id, preco, estoque) VALUES (?, ?, ?, ?, ?)',
+      [nome, codigo_barras ? codigo_barras.trim() : null, categoria_id, preco, estoque || 0]
     );
+
+    if (!codigo_barras) {
+      await db.query('UPDATE produtos SET codigo_barras = ? WHERE produto_id = ?', [
+        String(resultado.insertId),
+        resultado.insertId,
+      ]);
+    }
+
     res.json({ mensagem: 'Produto cadastrado com sucesso', id: resultado.insertId });
   } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ erro: 'Código de barras já cadastrado em outro produto' });
+    }
     console.error(err);
     res.status(500).json({ erro: 'Erro ao cadastrar produto' });
   }
 });
 
-// PUT /produtos/:id -> atualiza um produto existente
+// PUT /produtos/:id -> atualiza um produto existente.
+// Mesma regra do cadastro: código de barras em branco vira o próprio ID do produto.
 router.put('/:id', exigirPermissao('pode_produtos'), async (req, res) => {
-  const { nome, categoria_id, preco, estoque } = req.body;
+  const { nome, codigo_barras, categoria_id, preco, estoque } = req.body;
 
   if (!nome || !categoria_id || !preco) {
     return res.status(400).json({ erro: 'Nome, categoria e preço são obrigatórios' });
   }
+  if (codigo_barras && !validarCodigoBarras(codigo_barras)) {
+    return res.status(400).json({ erro: 'Código de barras deve ter só números, até 13 dígitos' });
+  }
+
+  const codigoFinal = codigo_barras ? codigo_barras.trim() : String(req.params.id);
 
   try {
     await db.query(
-      'UPDATE produtos SET nome = ?, categoria_id = ?, preco = ?, estoque = ? WHERE produto_id = ?',
-      [nome, categoria_id, preco, estoque || 0, req.params.id]
+      'UPDATE produtos SET nome = ?, codigo_barras = ?, categoria_id = ?, preco = ?, estoque = ? WHERE produto_id = ?',
+      [nome, codigoFinal, categoria_id, preco, estoque || 0, req.params.id]
     );
     res.json({ mensagem: 'Produto atualizado com sucesso' });
   } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ erro: 'Código de barras já cadastrado em outro produto' });
+    }
     console.error(err);
     res.status(500).json({ erro: 'Erro ao atualizar produto' });
   }

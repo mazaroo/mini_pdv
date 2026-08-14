@@ -30,4 +30,9 @@ function validarEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((email || '').trim());
 }
 
-module.exports = { validarCPF, validarTelefone, validarEmail };
+// Só dígitos, 1 a 13 caracteres (EAN-13 tem 13, mas aceita códigos internos menores)
+function validarCodigoBarras(codigo) {
+  return /^\d{1,13}$/.test((codigo || '').trim());
+}
+
+module.exports = { validarCPF, validarTelefone, validarEmail, validarCodigoBarras };

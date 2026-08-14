@@ -9,49 +9,24 @@
 </head>
 <body>
   <div class="container">
-    <h1>📦 Produtos</h1>
-
-    <form id="form-produto">
-      <label for="nome">Nome</label>
-      <input type="text" id="nome" required>
-
-      <label for="categoria">Categoria</label>
-      <div class="campo-com-acao">
-        <select id="categoria" required></select>
-        <button type="button" id="btn-nova-categoria" class="secundario" title="Criar categoria nova">+ Nova</button>
-      </div>
-
-      <div id="bloco-nova-categoria" class="bloco-inline" style="display:none;">
-        <input type="text" id="nome-nova-categoria" placeholder="Nome da nova categoria">
-        <button type="button" id="btn-confirmar-categoria">Adicionar</button>
-        <button type="button" id="btn-cancelar-categoria" class="secundario">Cancelar</button>
-      </div>
-
-      <label for="preco">Preço</label>
-      <input type="number" step="0.01" id="preco" required>
-
-      <label for="estoque">Estoque</label>
-      <input type="number" id="estoque" value="0">
-
-      <label for="imagem">Foto do produto (opcional)</label>
-      <div class="campo-imagem">
-        <img id="preview-imagem" class="preview-imagem" style="display:none;">
-        <input type="file" id="imagem" accept="image/*">
-      </div>
-
-      <button type="submit" id="btn-salvar-produto">Cadastrar produto</button>
-      <button type="button" id="btn-cancelar-produto" class="secundario" style="display:none;">Cancelar edição</button>
-    </form>
+    <div class="lista-header">
+      <h1>📦 Produtos</h1>
+      <button type="button" id="btn-novo-produto">+ Novo produto</button>
+    </div>
 
     <div class="lista-header">
-      <h2>Produtos cadastrados</h2>
-      <input type="text" id="busca-produto" class="busca" placeholder="🔎 Buscar por nome...">
+      <input type="text" id="busca-produto" class="busca" placeholder="🔎 Buscar por nome, código ou código de barras...">
+      <select id="filtro-categoria">
+        <option value="">Todas as categorias</option>
+      </select>
     </div>
+
     <table>
       <thead>
         <tr>
           <th></th>
           <th>ID</th>
+          <th>Cód. barras</th>
           <th>Nome</th>
           <th>Categoria</th>
           <th>Preço</th>
@@ -79,28 +54,119 @@
     </details>
   </div>
 
+  <div id="modal-novo-produto" class="modal-overlay">
+    <div class="modal-recibo modal-form-produto">
+      <h2>📦 Novo produto</h2>
+
+      <label for="novo-nome">Nome</label>
+      <input type="text" id="novo-nome" required>
+
+      <label for="novo-codigo-barras">Código de barras (opcional)</label>
+      <input type="text" id="novo-codigo-barras" inputmode="numeric" placeholder="Deixe em branco pra usar o ID do produto">
+
+      <label for="novo-categoria">Categoria</label>
+      <div class="campo-com-acao">
+        <select id="novo-categoria" required></select>
+        <button type="button" id="novo-btn-nova-categoria" class="secundario" title="Criar categoria nova">+ Nova</button>
+      </div>
+
+      <div id="novo-bloco-nova-categoria" class="bloco-inline" style="display:none;">
+        <input type="text" id="novo-nome-nova-categoria" placeholder="Nome da nova categoria">
+        <button type="button" id="novo-btn-confirmar-categoria">Adicionar</button>
+        <button type="button" id="novo-btn-cancelar-categoria" class="secundario">Cancelar</button>
+      </div>
+
+      <label for="novo-preco">Preço</label>
+      <input type="number" step="0.01" id="novo-preco" required>
+
+      <label for="novo-estoque">Estoque</label>
+      <input type="number" id="novo-estoque" value="0">
+
+      <label for="novo-imagem">Foto do produto (opcional)</label>
+      <div class="campo-imagem">
+        <img id="novo-preview-imagem" class="preview-imagem" style="display:none;">
+        <input type="file" id="novo-imagem" accept="image/*">
+      </div>
+
+      <div class="modal-acoes">
+        <button type="button" id="btn-salvar-novo-produto">Cadastrar produto</button>
+        <button type="button" id="btn-cancelar-novo-produto" class="secundario">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-editar-produto" class="modal-overlay">
+    <div class="modal-recibo modal-form-produto">
+      <h2>✏️ Editar produto</h2>
+
+      <label>ID</label>
+      <p id="editar-id" class="campo-fixo"></p>
+
+      <label for="editar-nome">Nome</label>
+      <input type="text" id="editar-nome" required>
+
+      <label for="editar-codigo-barras">Código de barras (opcional)</label>
+      <input type="text" id="editar-codigo-barras" inputmode="numeric" placeholder="Deixe em branco pra usar o ID do produto">
+
+      <label for="editar-categoria">Categoria</label>
+      <div class="campo-com-acao">
+        <select id="editar-categoria" required></select>
+        <button type="button" id="editar-btn-nova-categoria" class="secundario" title="Criar categoria nova">+ Nova</button>
+      </div>
+
+      <div id="editar-bloco-nova-categoria" class="bloco-inline" style="display:none;">
+        <input type="text" id="editar-nome-nova-categoria" placeholder="Nome da nova categoria">
+        <button type="button" id="editar-btn-confirmar-categoria">Adicionar</button>
+        <button type="button" id="editar-btn-cancelar-categoria" class="secundario">Cancelar</button>
+      </div>
+
+      <label for="editar-preco">Preço</label>
+      <input type="number" step="0.01" id="editar-preco" required>
+
+      <label for="editar-estoque">Estoque</label>
+      <input type="number" id="editar-estoque">
+
+      <label for="editar-imagem">Foto do produto (opcional)</label>
+      <div class="campo-imagem">
+        <img id="editar-preview-imagem" class="preview-imagem" style="display:none;">
+        <input type="file" id="editar-imagem" accept="image/*">
+      </div>
+
+      <div class="modal-acoes">
+        <button type="button" id="btn-salvar-editar-produto">Salvar alterações</button>
+        <button type="button" id="btn-cancelar-editar-produto" class="secundario">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
   <script>
     exigirLogin();
     exigirPermissao('pode_produtos');
     renderizarNavbar('produtos');
 
-    const form = document.getElementById('form-produto');
-    const btnSalvar = document.getElementById('btn-salvar-produto');
-    const btnCancelar = document.getElementById('btn-cancelar-produto');
     let produtos = [];
     let categorias = [];
     let editandoId = null;
-    let editandoCategoriaId = null;
     const ESTOQUE_BAIXO = 10;
+
+    // ---------- categorias (selects dos 2 modais + filtro + painel de gerenciamento) ----------
 
     async function carregarCategorias() {
       categorias = await apiGet('/api/categorias');
-      const select = document.getElementById('categoria');
-      const selecaoAnterior = select.value;
-      select.innerHTML = categorias.map(c => `<option value="${c.categoria_id}">${c.nome}</option>`).join('');
-      if (selecaoAnterior) select.value = selecaoAnterior;
+      preencherSelectsCategoria();
       renderizarCategorias();
+    }
+
+    function preencherSelectsCategoria() {
+      const opcoes = categorias.map(c => `<option value="${c.categoria_id}">${c.nome}</option>`).join('');
+      document.getElementById('novo-categoria').innerHTML = opcoes;
+      document.getElementById('editar-categoria').innerHTML = opcoes;
+
+      const filtro = document.getElementById('filtro-categoria');
+      const selecionado = filtro.value;
+      filtro.innerHTML = '<option value="">Todas as categorias</option>' + opcoes;
+      if (selecionado) filtro.value = selecionado;
     }
 
     function renderizarCategorias() {
@@ -128,32 +194,6 @@
       await carregarCategorias();
       return resultado.id;
     }
-
-    document.getElementById('btn-nova-categoria').addEventListener('click', () => {
-      document.getElementById('bloco-nova-categoria').style.display = 'flex';
-      document.getElementById('nome-nova-categoria').focus();
-    });
-
-    document.getElementById('btn-cancelar-categoria').addEventListener('click', () => {
-      document.getElementById('bloco-nova-categoria').style.display = 'none';
-      document.getElementById('nome-nova-categoria').value = '';
-    });
-
-    document.getElementById('btn-confirmar-categoria').addEventListener('click', async () => {
-      const campo = document.getElementById('nome-nova-categoria');
-      const nome = campo.value.trim();
-      if (!nome) {
-        mostrarToast('Digite o nome da categoria', 'erro');
-        return;
-      }
-
-      const id = await criarCategoria(nome);
-      if (id) {
-        document.getElementById('categoria').value = id;
-        campo.value = '';
-        document.getElementById('bloco-nova-categoria').style.display = 'none';
-      }
-    });
 
     function editarCategoria(id) {
       const c = categorias.find(x => x.categoria_id === id);
@@ -189,10 +229,80 @@
       }
     }
 
+    // categoria rápida — modal de novo produto
+    document.getElementById('novo-btn-nova-categoria').addEventListener('click', () => {
+      document.getElementById('novo-bloco-nova-categoria').style.display = 'flex';
+      document.getElementById('novo-nome-nova-categoria').focus();
+    });
+    document.getElementById('novo-btn-cancelar-categoria').addEventListener('click', () => {
+      document.getElementById('novo-bloco-nova-categoria').style.display = 'none';
+      document.getElementById('novo-nome-nova-categoria').value = '';
+    });
+    document.getElementById('novo-btn-confirmar-categoria').addEventListener('click', async () => {
+      const campo = document.getElementById('novo-nome-nova-categoria');
+      const nome = campo.value.trim();
+      if (!nome) {
+        mostrarToast('Digite o nome da categoria', 'erro');
+        return;
+      }
+      const id = await criarCategoria(nome);
+      if (id) {
+        document.getElementById('novo-categoria').value = id;
+        campo.value = '';
+        document.getElementById('novo-bloco-nova-categoria').style.display = 'none';
+      }
+    });
+
+    // categoria rápida — modal de editar produto
+    document.getElementById('editar-btn-nova-categoria').addEventListener('click', () => {
+      document.getElementById('editar-bloco-nova-categoria').style.display = 'flex';
+      document.getElementById('editar-nome-nova-categoria').focus();
+    });
+    document.getElementById('editar-btn-cancelar-categoria').addEventListener('click', () => {
+      document.getElementById('editar-bloco-nova-categoria').style.display = 'none';
+      document.getElementById('editar-nome-nova-categoria').value = '';
+    });
+    document.getElementById('editar-btn-confirmar-categoria').addEventListener('click', async () => {
+      const campo = document.getElementById('editar-nome-nova-categoria');
+      const nome = campo.value.trim();
+      if (!nome) {
+        mostrarToast('Digite o nome da categoria', 'erro');
+        return;
+      }
+      const id = await criarCategoria(nome);
+      if (id) {
+        document.getElementById('editar-categoria').value = id;
+        campo.value = '';
+        document.getElementById('editar-bloco-nova-categoria').style.display = 'none';
+      }
+    });
+
+    // ---------- lista de produtos + filtros ----------
+
     async function carregarProdutos() {
       produtos = await apiGet('/api/produtos');
-      renderizarProdutos(produtos);
+      aplicarFiltros();
     }
+
+    function aplicarFiltros() {
+      const termo = document.getElementById('busca-produto').value.trim().toLowerCase();
+      const categoriaId = document.getElementById('filtro-categoria').value;
+
+      const filtrados = produtos.filter(p => {
+        if (categoriaId && String(p.categoria_id) !== categoriaId) return false;
+        if (!termo) return true;
+        return (
+          p.nome.toLowerCase().includes(termo) ||
+          String(p.produto_id).includes(termo) ||
+          (p.codigo_barras ?? '').toLowerCase().includes(termo)
+        );
+      });
+
+      renderizarProdutos(filtrados);
+    }
+
+    document.getElementById('busca-produto').addEventListener('input', aplicarFiltros);
+    document.getElementById('filtro-categoria').addEventListener('change', aplicarFiltros);
 
     function renderizarProdutos(lista) {
       const tbody = document.getElementById('tabela-produtos');
@@ -203,6 +313,7 @@
           <tr class="${estoqueBaixo ? 'linha-alerta' : ''}">
             <td>${p.imagem ? `<img src="/${p.imagem}" class="miniatura-produto">` : '<span class="miniatura-vazia">📦</span>'}</td>
             <td>${p.produto_id}</td>
+            <td>${p.codigo_barras ?? '—'}</td>
             <td>${p.nome}</td>
             <td>${p.categoria}</td>
             <td>${formatarMoeda(p.preco)}</td>
@@ -217,44 +328,30 @@
       animarLinhas(tbody);
     }
 
-    function editarProduto(id) {
-      const p = produtos.find(x => x.produto_id === id);
-      if (!p) return;
+    // ---------- modal: novo produto ----------
 
-      editandoId = id;
-      document.getElementById('nome').value = p.nome ?? '';
-      document.getElementById('preco').value = p.preco ?? '';
-      document.getElementById('estoque').value = p.estoque ?? 0;
+    document.getElementById('btn-novo-produto').addEventListener('click', () => {
+      document.getElementById('novo-nome').value = '';
+      document.getElementById('novo-codigo-barras').value = '';
+      document.getElementById('novo-categoria').value = '';
+      document.getElementById('novo-preco').value = '';
+      document.getElementById('novo-estoque').value = 0;
+      document.getElementById('novo-imagem').value = '';
+      document.getElementById('novo-preview-imagem').style.display = 'none';
+      document.getElementById('modal-novo-produto').classList.add('ativo');
+    });
 
-      const selectCategoria = document.getElementById('categoria');
-      [...selectCategoria.options].forEach(opt => {
-        if (opt.textContent === p.categoria) selectCategoria.value = opt.value;
-      });
+    document.getElementById('btn-cancelar-novo-produto').addEventListener('click', () => {
+      document.getElementById('modal-novo-produto').classList.remove('ativo');
+    });
 
-      const preview = document.getElementById('preview-imagem');
-      if (p.imagem) {
-        preview.src = `/${p.imagem}`;
-        preview.style.display = 'block';
-      } else {
-        preview.style.display = 'none';
-      }
+    document.getElementById('novo-codigo-barras').addEventListener('input', (e) => {
+      e.target.value = mascararCodigoBarras(e.target.value);
+    });
 
-      btnSalvar.textContent = 'Salvar alterações';
-      btnCancelar.style.display = 'inline-block';
-      form.scrollIntoView({ behavior: 'smooth' });
-    }
-
-    function sairModoEdicao() {
-      editandoId = null;
-      form.reset();
-      document.getElementById('preview-imagem').style.display = 'none';
-      btnSalvar.textContent = 'Cadastrar produto';
-      btnCancelar.style.display = 'none';
-    }
-
-    document.getElementById('imagem').addEventListener('change', (e) => {
+    document.getElementById('novo-imagem').addEventListener('change', (e) => {
       const arquivo = e.target.files[0];
-      const preview = document.getElementById('preview-imagem');
+      const preview = document.getElementById('novo-preview-imagem');
       if (!arquivo) return;
 
       const leitor = new FileReader();
@@ -265,6 +362,148 @@
       leitor.readAsDataURL(arquivo);
     });
 
+    document.getElementById('btn-salvar-novo-produto').addEventListener('click', async () => {
+      const dados = {
+        nome: document.getElementById('novo-nome').value,
+        codigo_barras: document.getElementById('novo-codigo-barras').value,
+        categoria_id: document.getElementById('novo-categoria').value,
+        preco: document.getElementById('novo-preco').value,
+        estoque: document.getElementById('novo-estoque').value,
+      };
+
+      if (!dados.nome.trim()) {
+        mostrarToast('Digite o nome do produto', 'erro');
+        return;
+      }
+      if (!dados.categoria_id) {
+        mostrarToast('Escolha uma categoria', 'erro');
+        return;
+      }
+      if (!dados.preco) {
+        mostrarToast('Informe o preço', 'erro');
+        return;
+      }
+
+      const resultado = await apiPost('/api/produtos', dados);
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+        return;
+      }
+
+      const arquivoImagem = document.getElementById('novo-imagem').files[0];
+      if (arquivoImagem) {
+        const formData = new FormData();
+        formData.append('imagem', arquivoImagem);
+        const resultadoImagem = await apiUpload(`/api/produtos/${resultado.id}/imagem`, formData);
+        if (resultadoImagem.erro) {
+          mostrarToast(`Produto salvo, mas a foto falhou: ${resultadoImagem.erro}`, 'erro');
+          document.getElementById('modal-novo-produto').classList.remove('ativo');
+          carregarProdutos();
+          return;
+        }
+      }
+
+      mostrarToast(`✔ ${resultado.mensagem}`, 'sucesso');
+      document.getElementById('modal-novo-produto').classList.remove('ativo');
+      carregarProdutos();
+    });
+
+    // ---------- modal: editar produto ----------
+
+    function editarProduto(id) {
+      const p = produtos.find(x => x.produto_id === id);
+      if (!p) return;
+
+      editandoId = id;
+      document.getElementById('editar-id').textContent = `#${p.produto_id}`;
+      document.getElementById('editar-nome').value = p.nome ?? '';
+      document.getElementById('editar-codigo-barras').value = p.codigo_barras ?? '';
+      document.getElementById('editar-categoria').value = p.categoria_id ?? '';
+      document.getElementById('editar-preco').value = p.preco ?? '';
+      document.getElementById('editar-estoque').value = p.estoque ?? 0;
+
+      const preview = document.getElementById('editar-preview-imagem');
+      if (p.imagem) {
+        preview.src = `/${p.imagem}`;
+        preview.style.display = 'block';
+      } else {
+        preview.style.display = 'none';
+      }
+      document.getElementById('editar-imagem').value = '';
+
+      document.getElementById('modal-editar-produto').classList.add('ativo');
+    }
+
+    document.getElementById('btn-cancelar-editar-produto').addEventListener('click', () => {
+      document.getElementById('modal-editar-produto').classList.remove('ativo');
+      editandoId = null;
+    });
+
+    document.getElementById('editar-codigo-barras').addEventListener('input', (e) => {
+      e.target.value = mascararCodigoBarras(e.target.value);
+    });
+
+    document.getElementById('editar-imagem').addEventListener('change', (e) => {
+      const arquivo = e.target.files[0];
+      const preview = document.getElementById('editar-preview-imagem');
+      if (!arquivo) return;
+
+      const leitor = new FileReader();
+      leitor.onload = () => {
+        preview.src = leitor.result;
+        preview.style.display = 'block';
+      };
+      leitor.readAsDataURL(arquivo);
+    });
+
+    document.getElementById('btn-salvar-editar-produto').addEventListener('click', async () => {
+      const dados = {
+        nome: document.getElementById('editar-nome').value,
+        codigo_barras: document.getElementById('editar-codigo-barras').value,
+        categoria_id: document.getElementById('editar-categoria').value,
+        preco: document.getElementById('editar-preco').value,
+        estoque: document.getElementById('editar-estoque').value,
+      };
+
+      if (!dados.nome.trim()) {
+        mostrarToast('Digite o nome do produto', 'erro');
+        return;
+      }
+      if (!dados.categoria_id) {
+        mostrarToast('Escolha uma categoria', 'erro');
+        return;
+      }
+      if (!dados.preco) {
+        mostrarToast('Informe o preço', 'erro');
+        return;
+      }
+
+      const resultado = await apiPut(`/api/produtos/${editandoId}`, dados);
+      if (resultado.erro) {
+        mostrarToast(resultado.erro, 'erro');
+        return;
+      }
+
+      const arquivoImagem = document.getElementById('editar-imagem').files[0];
+      if (arquivoImagem) {
+        const formData = new FormData();
+        formData.append('imagem', arquivoImagem);
+        const resultadoImagem = await apiUpload(`/api/produtos/${editandoId}/imagem`, formData);
+        if (resultadoImagem.erro) {
+          mostrarToast(`Produto salvo, mas a foto falhou: ${resultadoImagem.erro}`, 'erro');
+          document.getElementById('modal-editar-produto').classList.remove('ativo');
+          editandoId = null;
+          carregarProdutos();
+          return;
+        }
+      }
+
+      mostrarToast(`✔ ${resultado.mensagem}`, 'sucesso');
+      document.getElementById('modal-editar-produto').classList.remove('ativo');
+      editandoId = null;
+      carregarProdutos();
+    });
+
     async function excluirProduto(id) {
       if (!confirm('Tem certeza que deseja excluir este produto?')) return;
 
@@ -273,56 +512,13 @@
         mostrarToast(resultado.erro, 'erro');
       } else {
         mostrarToast(`✔ ${resultado.mensagem}`, 'sucesso');
-        if (editandoId === id) sairModoEdicao();
+        if (editandoId === id) {
+          document.getElementById('modal-editar-produto').classList.remove('ativo');
+          editandoId = null;
+        }
         carregarProdutos();
       }
     }
-
-    btnCancelar.addEventListener('click', sairModoEdicao);
-
-    document.getElementById('busca-produto').addEventListener('input', (e) => {
-      const termo = e.target.value.trim().toLowerCase();
-      renderizarProdutos(produtos.filter(p => p.nome.toLowerCase().includes(termo)));
-    });
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const dados = {
-        nome: document.getElementById('nome').value,
-        categoria_id: document.getElementById('categoria').value,
-        preco: document.getElementById('preco').value,
-        estoque: document.getElementById('estoque').value,
-      };
-
-      const resultado = editandoId
-        ? await apiPut(`/api/produtos/${editandoId}`, dados)
-        : await apiPost('/api/produtos', dados);
-
-      if (resultado.erro) {
-        mostrarToast(resultado.erro, 'erro');
-        return;
-      }
-
-      // Se uma foto foi escolhida, envia ela num segundo passo (o produto já existe)
-      const arquivoImagem = document.getElementById('imagem').files[0];
-      const produtoId = editandoId || resultado.id;
-
-      if (arquivoImagem) {
-        const formData = new FormData();
-        formData.append('imagem', arquivoImagem);
-        const resultadoImagem = await apiUpload(`/api/produtos/${produtoId}/imagem`, formData);
-        if (resultadoImagem.erro) {
-          mostrarToast(`Produto salvo, mas a foto falhou: ${resultadoImagem.erro}`, 'erro');
-          sairModoEdicao();
-          carregarProdutos();
-          return;
-        }
-      }
-
-      mostrarToast(`✔ ${resultado.mensagem}`, 'sucesso');
-      sairModoEdicao();
-      carregarProdutos();
-    });
 
     carregarCategorias();
     carregarProdutos();

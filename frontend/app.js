@@ -73,6 +73,11 @@ function mascararTelefone(valor) {
     .replace(/(\d{4,5})(\d{4})$/, '$1-$2');
 }
 
+// Só dígitos, até 13 caracteres (EAN-13)
+function mascararCodigoBarras(valor) {
+  return valor.replace(/\D/g, '').slice(0, 13);
+}
+
 // Valida CPF de verdade, conferindo os dois dígitos verificadores
 function validarCPF(cpf) {
   cpf = (cpf || '').replace(/\D/g, '');
