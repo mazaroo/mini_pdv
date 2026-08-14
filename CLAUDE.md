@@ -18,6 +18,8 @@ Runs on `http://localhost:3000` — the same Express process serves both the RES
 
 Requires a local MySQL server with a database named `pdv` already created (this project does not create or migrate its own schema — see Database below). DB credentials come from `DB_HOST`/`DB_PORT`/`DB_USER`/`DB_PASSWORD`/`DB_NAME` env vars (see `backend/.env.example`), falling back to the original local dev values (`localhost`/`root`/`masterkey`/`pdv`) when unset — so nothing needs configuring for local dev, but production deploys must set real env vars rather than editing `db.js`. Frontend `API_URL` (in `app.js`) is `''` (same-origin) on purpose — don't hardcode a host there, it'd break as soon as this is deployed anywhere but localhost.
 
+There's also a `package.json` at the **repo root** — it's a thin wrapper only used by hosting (Railway), not for local dev (never `npm install`/`npm start` from the repo root yourself, always `cd backend` first). It exists so the platform's build can see both `backend/` and `frontend/` at once: its `postinstall`/`start` scripts just `cd backend` and delegate. See `DEPLOY.md` for why (Railway's "Root Directory" pointed at `backend/` hides the sibling `frontend/` folder from the build entirely — the API worked but static pages 404'd until this was added and Root Directory was cleared).
+
 ## Architecture
 
 **Monolith, no build step.** `backend/server.js` mounts one router per resource under `backend/routes/` and also serves `frontend/` statically. Each route file talks to MySQL through the shared promise-based pool in `backend/db.js`. Shared backend logic lives in `backend/utils/`: `validadores.js` (CPF/telefone/email validation) and `permissoes.js` (permission-check middleware, see below).
